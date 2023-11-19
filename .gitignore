@@ -1,0 +1,14 @@
+# logs
+.log
+logs
+.logs
+
+# python
+__pycache__
+test.py
+
+# environment parameters
+.env
+
+# db
+.db
