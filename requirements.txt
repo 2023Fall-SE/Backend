@@ -10,3 +10,4 @@ bcrypt
 pydantic
 requests
 python-multipart
+sqlalchemy

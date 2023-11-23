@@ -76,7 +76,7 @@ class Event(Base):
     location = Column(String(100), nullable=False)
     start_time = Column(DateTime, nullable=False)
     end_time = Column(DateTime)
-    is_self_drive = Column(DateTime, nullable=False)
+    is_self_drive = Column(Boolean, nullable=False)
     score = Column(Float)
     rating_count = Column(Integer)
 

@@ -4,7 +4,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 import bcrypt
-from CarpoolService.backend.config import Config
+from config import Config
 from pydantic import BaseModel
 
 class TokenData(BaseModel):

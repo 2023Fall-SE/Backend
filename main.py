@@ -13,6 +13,10 @@ import uvicorn
 from sqlalchemy.orm.session import Session
 from shared.auth import Token, authenticate_user, create_access_token, get_current_user, oauth2_scheme
 
+db_dir = os.getcwd() + "/database/"
+if not os.path.isdir(os.getcwd() + db_dir):
+    os.mkdir(db_dir)
+
 model.Base.metadata.create_all(bind=engine)
 app = FastAPI()
 origins = [
