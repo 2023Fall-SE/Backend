@@ -190,9 +190,9 @@ def create_new_carpool(eventForm: CreateEventBase, db: Session = Depends(get_db)
     db.add(addEvent)
     db.commit()
     # return success or fail
-    return {"Event_Id" : addEvent.id}
+    return {"event_id" : addEvent.id}
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0")
+    uvicorn.run("main:app", host="0.0.0.0", reload=True)
 
