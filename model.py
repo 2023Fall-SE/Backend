@@ -79,7 +79,9 @@ class Event(Base):
     is_self_drive = Column(Boolean, nullable=False)
     score = Column(Float)
     rating_count = Column(Integer)
-
+    number_of_people = Column(Integer)
+    available_seats = Column(Integer)
+    
 class Communication(Base):
     """
     id: unique id
