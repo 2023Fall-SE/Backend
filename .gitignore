@@ -11,4 +11,4 @@ test.py
 .env
 
 # db
-.db
+*.db
