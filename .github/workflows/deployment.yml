@@ -8,21 +8,18 @@ env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   SERVICE_NAME: create-react-app
   RUN_REGION: us-central1
+  python-version: '3.9'
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: [3.9]
 
     steps:
-
       - uses: actions/checkout@v2
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v4
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install Dependencies
         run: |
@@ -34,7 +31,7 @@ jobs:
           cd Backend
           python main.py
           
-      - uses: GoogleCloudPlatform/github-actions/setup-gcloud@v0
+      - uses: google-github-actions/setup-gcloud@v1
         with:
           service_account_email: ${{ secrets.GCP_SA_EMAIL }}
           service_account_key: ${{ secrets.GCP_SA_KEY }}
