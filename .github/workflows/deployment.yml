@@ -2,14 +2,12 @@ name: deploy-to-gcp
 
 on:
   push:
-    branches: 
-    - prod
+    branches: [prod]
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   SERVICE_NAME: create-react-app
   RUN_REGION: us-central1
-
 
 jobs:
   deploy:
