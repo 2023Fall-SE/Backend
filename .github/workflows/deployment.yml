@@ -35,7 +35,7 @@ jobs:
           cd Backend
           python main.py
           
-      - uses: GoogleCloudPlatform/github-actions/setup-gcloud@master
+      - uses: GoogleCloudPlatform/github-actions/setup-gcloud@main
         with:
           version: '286.0.0'
           service_account_email: ${{ secrets.GCP_SA_EMAIL }}
