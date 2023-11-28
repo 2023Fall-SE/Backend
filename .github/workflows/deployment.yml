@@ -3,7 +3,7 @@ name: deploy-to-gcp
 on:
   push:
     branches: 
-    - master
+    - prod
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
