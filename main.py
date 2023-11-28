@@ -69,22 +69,37 @@ def user_login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: S
 def create_user(user_form: UserCreate, db: Session = Depends(get_db)):
     username, password, display_name, phone, mail = user_form.username, user_form.password, user_form.display_name, user_form.phone, user_form.mail
     is_exist = db.query(User).filter_by(username=username).first()
+
     if is_exist:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="帳號已被註冊")
-    else:
-        salt = bcrypt.gensalt()
-        hashed = bcrypt.hashpw(password.encode('utf8'), salt)
-        user = User(
-            username=username,
-            password=hashed,
-            display_name=display_name,
-            phone=phone,
-            carpool_money=50,
-            mail=mail,
-        )
-        db.add(user)
-        db.commit()
-        return {"user_id": user.id}
+
+    same_name_user = db.query(User).filter_by(display_name=display_name).first()
+    if same_name_user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="此使用者名稱已被使用")
+
+    if phone:
+        user_with_phone = db.query(User).filter_by(phone=phone).first()
+        if user_with_phone:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="此手機號碼已被使用")
+
+    if mail:
+        user_with_mail = db.query(User).filter_by(mail=mail).first()
+        if user_with_mail:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="此信箱已被使用")
+
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password.encode('utf8'), salt)
+    user = User(
+        username=username,
+        password=hashed,
+        display_name=display_name,
+        phone=phone,
+        carpool_money=50,
+        mail=mail,
+    )
+    db.add(user)
+    db.commit()
+    return {"user_id": user.id}
 
 # (5)搜尋
 @app.get("/find-carpool", status_code=status.HTTP_200_OK)
@@ -259,18 +274,18 @@ async def update_user(
 
     #ensure no repeated phone, mail, d_name
     if display_name:
-        user_with_display_name = db.query(User).filter_by(display_name=display_name).first()
-        if user_with_display_name:
+        same_name_user = db.query(User).filter_by(display_name=display_name).first()
+        if same_name_user and same_name_user.id != user_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="此使用者名稱已被使用")
 
     if phone:
         user_with_phone = db.query(User).filter_by(phone=phone).first()
-        if user_with_phone:
+        if user_with_phone and user_with_phone.id != user_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="此手機號碼已被使用")
 
     if mail:
         user_with_mail = db.query(User).filter_by(mail=mail).first()
-        if user_with_mail:
+        if user_with_mail and user_with_mail.id != user_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="此信箱已被使用")
         
     update_dict = {"password": hashed_pwd, 
