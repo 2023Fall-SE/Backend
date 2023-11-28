@@ -13,7 +13,7 @@ pre-commit install
 python main.py
 ```
 
-## FastAPI doc Route:  
+## FastAPI doc Route:
 ```
 http://127.0.0.1:8000/docs
 ```

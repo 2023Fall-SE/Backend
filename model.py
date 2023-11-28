@@ -11,21 +11,23 @@ class User(Base):
     phone: 手機號碼
     license: 使用者駕照
     carpool_money: 代幣數量
+    mail: 使用者信箱
     picture: 個人頭像 不確定會不會用 先開
     other_intro: 其他介紹 不確定會不會用 先開
     """
 
     __tablename__ = "user"
-    
+
     id = Column(Integer, primary_key=True)
     username = Column(String(20), nullable=False)
     password = Column(String(60), nullable=False)
     display_name = Column(String(20), nullable=False)
     phone = Column(String(13))
-    license = Column(String(100))
+    license = Column(String(100))  #image URL
     carpool_money = Column(Float, nullable=False)
+    mail = Column(String(100))
     picture = Column(String(100))
-    other_intro = Column(String(100))
+    other_intro = Column(String(100))   #<待討論>past_event
 
     def __repr__(self):
         return "<User %r>" % self.id
@@ -81,7 +83,7 @@ class Event(Base):
     rating_count = Column(Integer)
     number_of_people = Column(Integer)
     available_seats = Column(Integer)
-    
+
 class Communication(Base):
     """
     id: unique id

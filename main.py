@@ -1,22 +1,30 @@
 import json
 import os
 from typing import Annotated
-from fastapi import FastAPI, Depends, status, HTTPException
+from fastapi import FastAPI, Depends, status, HTTPException, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import  OAuth2PasswordRequestForm
 import bcrypt
 import model
 from model import User, Event
-from schema import UserCreate, CreateEventBase, UserId, EventId, FindLocationForm
+from schema import UserCreate, CreateEventBase, UserId, EventId, FindLocationForm, UserView, UserLicense
 from database import SessionLocal, engine
 import uvicorn
 from sqlalchemy.orm.session import Session
+from sqlalchemy import or_
 from shared.auth import Token, authenticate_user, create_access_token, get_current_user, oauth2_scheme
 from datetime import datetime
+from config import Config
+import random
+import string
+from starlette.responses import FileResponse
 
 db_dir = os.getcwd() + "/database/"
 if not os.path.isdir(db_dir):
     os.mkdir(db_dir)
+
+if not os.path.isdir(Config.LICENSE_UPLOAD_PATH):
+    os.mkdir(Config.LICENSE_UPLOAD_PATH)
 
 model.Base.metadata.create_all(bind=engine)
 app = FastAPI()
@@ -57,7 +65,7 @@ def user_login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: S
 
 @app.post("/user", status_code=status.HTTP_201_CREATED)
 def create_user(user_form: UserCreate, db: Session = Depends(get_db)):
-    username, password, display_name, phone, = user_form.username, user_form.password, user_form.display_name, user_form.phone
+    username, password, display_name, phone, mail = user_form.username, user_form.password, user_form.display_name, user_form.phone, user_form.mail
     is_exist = db.query(User).filter_by(username=username).first()
     if is_exist:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="帳號已被註冊")
@@ -69,7 +77,8 @@ def create_user(user_form: UserCreate, db: Session = Depends(get_db)):
             password=hashed,
             display_name=display_name,
             phone=phone,
-            carpool_money=50
+            carpool_money=50,
+            mail=mail,
         )
         db.add(user)
         db.commit()
@@ -92,8 +101,6 @@ def find_carpool(startLocation:str, endLocation:str, db: Session = Depends(get_d
     if len(eventList) == 0:
         return {"result" : "None"}
     return eventList
-
-
 
 
 # (6)加入此共乘     建議把上下 及搜尋刪除
@@ -160,7 +167,7 @@ def  end_the_carpool(eventID:EventId, db: Session = Depends(get_db)):
 # @app.get("/InitiateCarpoolEventUI/{userID}/{numberOfPeople}/{selfdriveOrNot}/{startLocation}/{endLocation}/{otherLocation}")
 @app.post("/initiate-carpool-event-ui", status_code=status.HTTP_200_OK)
 def create_new_carpool(eventForm: CreateEventBase, db: Session = Depends(get_db)):
-    # user_id, initiator, start_time, self_drive_or_not, number_of_people, start_location, 
+    # user_id, initiator, start_time, self_drive_or_not, number_of_people, start_location,
     user_id, start_time, self_drive_or_not, number_of_people = eventForm.user_id, eventForm.start_time, eventForm.self_drive_or_not, eventForm.number_of_people
     #check user_id
     user = db.query(User).filter_by(id=eventForm.user_id).first()
@@ -180,12 +187,12 @@ def create_new_carpool(eventForm: CreateEventBase, db: Session = Depends(get_db)
 
     stops = ",".join(eventForm.other_location)
     wholeLocation = ',' + eventForm.start_location + ',' + stops + ',' + eventForm.end_location + ','
-    addEvent = Event(initiator=user_id, 
+    addEvent = Event(initiator=user_id,
                 joiner=',' + str(user_id) + ',',
-                location=wholeLocation, 
-                start_time=start_time, 
+                location=wholeLocation,
+                start_time=start_time,
                 is_self_drive=self_drive_or_not,
-                number_of_people=number_of_people, 
+                number_of_people=number_of_people,
                 available_seats=number_of_people-1)
     db.add(addEvent)
     db.commit()
@@ -193,6 +200,134 @@ def create_new_carpool(eventForm: CreateEventBase, db: Session = Depends(get_db)
     return {"event_id" : addEvent.id}
 
 
+# User Page Info
+@app.post("/update-user-info", status_code=status.HTTP_200_OK)
+async def update_user(
+    userinfoForm: UserView,
+    db: Session = Depends(get_db)):
+
+    user_id, password, phone, display_name, mail = (
+        userinfoForm.user_id,
+        userinfoForm.password,
+        userinfoForm.phone,
+        userinfoForm.display_name,
+        userinfoForm.mail,
+    )
+
+    #check user_id
+    user = db.query(User).filter_by(id=user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此使用者")
+
+    #hash the new password
+    if password:
+        salt = bcrypt.gensalt()
+        hashed_pwd = bcrypt.hashpw(password.encode('utf8'), salt)
+
+    #ensure no repeated phone, mail, d_name
+    if display_name:
+        user_with_display_name = db.query(User).filter_by(display_name=display_name).first()
+        if user_with_display_name:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="此使用者名稱已被使用")
+
+    if phone:
+        user_with_phone = db.query(User).filter_by(phone=phone).first()
+        if user_with_phone:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="此手機號碼已被使用")
+
+    if mail:
+        user_with_mail = db.query(User).filter_by(mail=mail).first()
+        if user_with_mail:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="此信箱已被使用")
+        
+    update_dict = {"password": hashed_pwd, 
+                   "phone": phone, 
+                   "display_name": display_name, 
+                   "mail": mail,
+                   }
+    update_dict_notnull = {key: update_dict[key] for key in update_dict if update_dict[key] is not None}
+
+
+    db.query(User).filter_by(id=user_id).update(update_dict_notnull)
+    db.commit()
+
+    return {"user_id": user_id}
+
+@app.get("/get-user-info/{userid}", status_code=status.HTTP_200_OK)
+async def get_user(
+    userid: int,
+    db: Session = Depends(get_db)):
+
+    #check user_id
+    user = db.query(User).filter_by(id=userid).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此使用者")
+
+    res = {"user_id": user.id, "phone": user.phone, "display_name": user.display_name, "mail": user.mail}
+    return res
+
+@app.post("/update-user-license", status_code=status.HTTP_200_OK)  #assume license_file != NULL
+async def update_license(
+        userid: int,
+        license_file: Annotated[UploadFile, File()],
+        db: Session = Depends(get_db),
+    ):
+
+    #Read and Save the license_file content
+    save_path = ""
+
+    if license_file.content_type not in ['image/jpeg', 'image/png']:
+        raise HTTPException(status_code=406, detail="Please upload only .jpeg files")
+
+    #generate random string as the file name
+    random_source = string.ascii_letters + string.digits
+    random_str = ''.join((random.choice(random_source) for i in range(10)))
+    content_type = license_file.content_type.split('/')[1]
+    random_license_name = ''.join((str(userid), "_", random_str, ".", content_type))  #file name = {userid}_{random_str}.{png/jpeg}
+
+
+    save_path = os.path.join(Config.LICENSE_UPLOAD_PATH, random_license_name)
+    with open(save_path, "wb") as file:
+        file.write(license_file.file.read())
+
+    db.query(User).filter_by(id=userid).update(dict(
+        license=random_license_name
+    ))
+    db.commit()
+
+    return {"license_file": userid}
+
+@app.get("/get-user-license/{userid}", status_code=status.HTTP_200_OK)
+async def get_license(
+    userid: int,
+    db: Session = Depends(get_db)):
+
+    #check user_id
+    user = db.query(User).filter_by(id=userid).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此使用者")
+    
+    if not user.license:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="此使用者未上傳駕照")
+        
+    license_path = os.path.join(Config.LICENSE_UPLOAD_PATH, user.license)
+    return FileResponse(license_path, media_type='image',filename=user.license)
+
+@app.delete("/delete-user-license/{userid}", status_code=status.HTTP_200_OK)
+async def delete_license(
+    userid: int,
+    db: Session = Depends(get_db)):
+
+    #check user_id
+    user = db.query(User).filter_by(id=userid).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此使用者")
+
+    user.license = None
+    db.commit()
+
+    return {"user_id": userid}
+
+
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", reload=True)
-

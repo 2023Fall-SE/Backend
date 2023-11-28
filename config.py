@@ -14,5 +14,7 @@ class Config(object):
     JWT_ALGORITHM = "HS256"
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(seconds=60)
 
+    LICENSE_UPLOAD_PATH = os.path.abspath(os.getcwd()) + "/license/"
+
     ENVIRONMENT = os.getenv("ENVIRONMENT")
     RELEASE_VERSION = "0.0.1"
