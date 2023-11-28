@@ -2,23 +2,48 @@ name: deploy-to-gcp
 
 on:
   push:
-    branches: [prod]
+    branches: 
+    - master
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  SERVICE_NAME: create-react-app
+  RUN_REGION: us-central1
+
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.9]
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v2
 
-    - uses: GoogleCloudPlatform/github-actions/setup-gcloud@master
-      with:
-        version: '286.0.0'
-        service_account_email: ${{ secrets.GCP_SA_EMAIL }}
-        service_account_key: ${{ secrets.GCP_SA_KEY }}
-        project_id: ${{ secrets.GCP_PROJECT_ID }}
-        export_default_credentials: true
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v1
+        with:
+          python-version: ${{ matrix.python-version }}
 
-    - name: Info
-      run: gcloud info
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r ./Backend/requirements.txt
+        
+      - name: Run Tests
+        run: |
+          cd Backend
+          python main.py
+          
+      - uses: GoogleCloudPlatform/github-actions/setup-gcloud@master
+        with:
+          version: '286.0.0'
+          service_account_email: ${{ secrets.GCP_SA_EMAIL }}
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          export_default_credentials: true
+
+      - name: Info
+        run: gcloud info
