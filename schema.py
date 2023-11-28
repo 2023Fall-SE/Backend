@@ -11,7 +11,7 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     phone: Optional[str] = Field(min_length=10, max_length=10, pattern=r"[0-9]", default=None)
-    # mail: Optional[str] = Field(max_length=100, pattern=r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,3}$")
+    mail: Optional[str] = Field(max_length=100, pattern=r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,3}$")
 
 class CreateEventBase(BaseModel):
     user_id: int
@@ -20,13 +20,20 @@ class CreateEventBase(BaseModel):
     number_of_people : int = Field(ge=2, le=7)
     start_location : str
     end_location : str
-    other_location : list[str]
+    other_location : list[str]  
+    acc_payable: confloat(ge=1, le=1000) = Field(default=100)
 
 class UserId(BaseModel):
     user_id : int
 
-class EventId(BaseModel):
+class EventJoin(BaseModel):
     event_id : int
+    user_id: int
+    start_loc: str
+    end_loc: str
+
+class EventId(BaseModel):
+    event_id: int
 
 class FindLocationForm(BaseModel):
     start_location:str

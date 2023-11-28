@@ -7,17 +7,19 @@ from fastapi.security import  OAuth2PasswordRequestForm
 import bcrypt
 import model
 from model import User, Event
-from schema import UserCreate, CreateEventBase, UserId, EventId, FindLocationForm, UserView, UserLicense
+from schema import UserCreate, CreateEventBase, UserId, EventJoin, EventId, FindLocationForm, UserView, UserLicense
 from database import SessionLocal, engine
 import uvicorn
 from sqlalchemy.orm.session import Session
 from sqlalchemy import or_
 from shared.auth import Token, authenticate_user, create_access_token, get_current_user, oauth2_scheme
+from shared.payment import create_payment
 from datetime import datetime
 from config import Config
 import random
 import string
 from starlette.responses import FileResponse
+
 
 db_dir = os.getcwd() + "/database/"
 if not os.path.isdir(db_dir):
@@ -105,21 +107,37 @@ def find_carpool(startLocation:str, endLocation:str, db: Session = Depends(get_d
 
 # (6)加入此共乘     建議把上下 及搜尋刪除
 @app.post("/join-the-carpool", status_code=status.HTTP_200_OK)
-def join_the_carpool(eventForm:EventId, user:UserId, db: Session = Depends(get_db)):
+def join_the_carpool(eventForm:EventJoin, db: Session = Depends(get_db)):
     event = db.query(Event).filter_by(id=eventForm.event_id).first()
+
     if not event:
-       raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此Event")
-    user = db.query(User).filter_by(id=user.user_id).first()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此Event")
+    user = db.query(User).filter_by(id=eventForm.user_id).first()
     if not user:
-       raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此User")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此User")
     if event.available_seats < 1:
-       raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="位子不夠")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="位子不夠")
     if str(user.id) in event.joiner:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="使用者已在此Event")
+    
+
+    #find the location id and update the joiner_to_loc column
+    loc_list = event.location.split(',')
+    if eventForm.start_loc not in loc_list:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="起始地點無效")
+
+    if eventForm.end_loc not in loc_list or loc_list.index(eventForm.end_loc) <= loc_list.index(eventForm.start_loc):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="結束地點無效")
+    
     newJoiner = event.joiner + str(user.id) + ','
     event.joiner = newJoiner
     event.available_seats = event.available_seats - 1
+
+    start_loc_idx, end_loc_idx = loc_list.index(eventForm.start_loc), loc_list.index(eventForm.end_loc)
+    joiner_loc_str = f", {start_loc_idx-1}-{end_loc_idx-1}"
+    event.joiner_to_location = event.joiner_to_location + joiner_loc_str
     db.commit()
+
     return {"result" : "success"}
 
 
@@ -150,7 +168,7 @@ def carpool_chat_room(eventID:int, db: Session = Depends(get_db)):
 
 # (7) 結束此共乘
 @app.post("/end-the-carpool", status_code=status.HTTP_200_OK)
-def  end_the_carpool(eventID:EventId, db: Session = Depends(get_db)):
+def end_the_carpool(eventID:EventId, db: Session = Depends(get_db)):
     event = db.query(Event).filter_by(id = eventID.event_id).first()
     if not event:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此Event")
@@ -159,6 +177,11 @@ def  end_the_carpool(eventID:EventId, db: Session = Depends(get_db)):
     db.query(Event).filter_by(id=eventID.event_id).update({'end_time':datetime.now()})
     db.query(Event).filter_by(id=eventID.event_id).update({'available_seats':0})
     db.commit()
+
+    oncreate = create_payment(event, db) #create Payment instances for joiners and calculate payables respectively
+    if not oncreate:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Payment創建失敗")
+
     return {"result" : "success"}
 
 
@@ -168,7 +191,8 @@ def  end_the_carpool(eventID:EventId, db: Session = Depends(get_db)):
 @app.post("/initiate-carpool-event-ui", status_code=status.HTTP_200_OK)
 def create_new_carpool(eventForm: CreateEventBase, db: Session = Depends(get_db)):
     # user_id, initiator, start_time, self_drive_or_not, number_of_people, start_location,
-    user_id, start_time, self_drive_or_not, number_of_people = eventForm.user_id, eventForm.start_time, eventForm.self_drive_or_not, eventForm.number_of_people
+    user_id, start_time, self_drive_or_not, number_of_people, acc_payable = eventForm.user_id, eventForm.start_time, eventForm.self_drive_or_not, eventForm.number_of_people, eventForm.acc_payable
+    
     #check user_id
     user = db.query(User).filter_by(id=eventForm.user_id).first()
     if not user:
@@ -183,25 +207,34 @@ def create_new_carpool(eventForm: CreateEventBase, db: Session = Depends(get_db)
     # check date
     if start_time.timestamp() < datetime.now().timestamp():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="日期輸入錯誤")
+    
+    total_loc_list = [eventForm.start_location] + eventForm.other_location + [eventForm.end_location]
+    num_loc = len(total_loc_list)
 
+    #assume no repeated location
+    if len(list(dict.fromkeys(total_loc_list))) < len(total_loc_list):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="地點不可重複")
 
     stops = ",".join(eventForm.other_location)
     wholeLocation = ',' + eventForm.start_location + ',' + stops + ',' + eventForm.end_location + ','
     addEvent = Event(initiator=user_id,
-                joiner=',' + str(user_id) + ',',
-                location=wholeLocation,
-                start_time=start_time,
-                is_self_drive=self_drive_or_not,
-                number_of_people=number_of_people,
-                available_seats=number_of_people-1)
+                    joiner=',' + str(user_id) + ',',
+                    location=wholeLocation,
+                    start_time=start_time,
+                    is_self_drive=self_drive_or_not,
+                    number_of_people=number_of_people,
+                    available_seats=number_of_people-1,
+                    accounts_payable=acc_payable,
+                    joiner_to_location=f"0-{num_loc-1}",   #此attribute第一格為initiator之start, end地點
+                )
     db.add(addEvent)
     db.commit()
     # return success or fail
     return {"event_id" : addEvent.id}
 
-
+             
 # User Page Info
-@app.post("/update-user-info", status_code=status.HTTP_200_OK)
+@app.put("/update-user-info", status_code=status.HTTP_200_OK)
 async def update_user(
     userinfoForm: UserView,
     db: Session = Depends(get_db)):
@@ -273,6 +306,11 @@ async def update_license(
         db: Session = Depends(get_db),
     ):
 
+    #check user_id
+    user = db.query(User).filter_by(id=userid).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此使用者")
+
     #Read and Save the license_file content
     save_path = ""
 
@@ -327,6 +365,41 @@ async def delete_license(
     db.commit()
 
     return {"user_id": userid}
+
+
+# Payment
+@app.put("/payment", status_code=status.HTTP_200_OK)
+async def update_user_account(
+    userid: int,
+    eventid: int,
+    db: Session = Depends(get_db)):
+
+    #check user_id
+    user = db.query(User).filter_by(id=userid).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此使用者")
+    
+    #check event_id
+    event = db.query(Event).filter_by(id=eventid).first()
+    if not event:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此共乘事件")
+    
+    ###todo: link to the Line Pay API
+
+    return {"total_paid": "test"}
+
+@app.get("/payment/{userid}", status_code=status.HTTP_200_OK)
+async def get_user_account(
+    userid: int,
+    db: Session = Depends(get_db)):
+
+    #check user_id
+    user = db.query(User).filter_by(id=userid).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此使用者")
+    
+    res = {"user_id": user.id, "account": user.carpool_money}
+    return res
 
 
 if __name__ == "__main__":

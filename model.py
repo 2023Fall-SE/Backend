@@ -27,7 +27,7 @@ class User(Base):
     carpool_money = Column(Float, nullable=False)
     mail = Column(String(100))
     picture = Column(String(100))
-    other_intro = Column(String(100))   #<待討論>past_event
+    other_intro = Column(String(100))   
 
     def __repr__(self):
         return "<User %r>" % self.id
@@ -45,6 +45,7 @@ class Payment(Base):
     time: 交易時間 (Payment若為付款，付款時需要更新)
     event_id: Payment若為付款則為 FK to event 否則為 null
     isCompleted: Payment若為付款，則用來判斷用戶是否完成付款。
+    user_id: 付款者 
     """
 
     __tablename__ = "payment"
@@ -54,6 +55,7 @@ class Payment(Base):
     time = Column(DateTime, default=datetime.now())
     event_id = Column(Integer, ForeignKey('event.id'))
     isCompleted = Column(Boolean, nullable=False)
+    user_id = Column(Integer, ForeignKey('user.id'))
 
     def __repr__(self):
         return "<Payment %r>" % self.id
@@ -64,11 +66,13 @@ class Event(Base):
     initiator: 發起者, FK to User
     joiner: 這邊用string, 不做 FK 用偷吃步的方式 "joiner1,joiner2..." 紀錄
     location: 同上用偷吃步的方式, ex: "中正紀念堂,台大,古亭"
+    joiner_to_location: 每個joiner的上下車地點, ex: "1-3, 2-3" (1: 中正紀念堂, 2: 台大, 3: 古亭), joiner1一定為initiator
     start_time: 共乘開始時間
     end_time: 共乘結束時間 (在結束時紀錄)
     is_self_drive: 是否是自駕 (若是，程式邏輯應去查看使用者是否有上傳駕照)
     score: 乘客對此共乘的平均評分 (0~5)，這邊也是不想額外開表只能記平均
     rating_count: 有幾個乘客評分了，用來讓你計算上面的平均分
+    accounts_payable: Event總共須付的錢 (由initiator在create new event時設定)
     """
 
     __tablename__ = "event"
@@ -76,6 +80,7 @@ class Event(Base):
     initiator = Column(Integer, ForeignKey('user.id'), nullable=False)
     joiner = Column(String(100), nullable=False)
     location = Column(String(100), nullable=False)
+    joiner_to_location = Column(String(100), nullable=True)
     start_time = Column(DateTime, nullable=False)
     end_time = Column(DateTime)
     is_self_drive = Column(Boolean, nullable=False)
@@ -83,6 +88,7 @@ class Event(Base):
     rating_count = Column(Integer)
     number_of_people = Column(Integer)
     available_seats = Column(Integer)
+    accounts_payable = Column(Float, nullable=False)
 
 class Communication(Base):
     """
