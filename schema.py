@@ -9,9 +9,10 @@ class UserBase(BaseModel):
     display_name: str = Field(min_length=3, max_length=20)
 
 
+
 class UserCreate(UserBase):
     phone: Optional[str] = Field(min_length=10, max_length=10, pattern=r"[0-9]", default=None)
-    # mail: Optional[str] = Field(max_length=100, pattern=r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,3}$")
+    mail: Optional[str] = Field(max_length=100, pattern=r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,3}$",default=None)
 
 class CreateEventBase(BaseModel):
     user_id: int
