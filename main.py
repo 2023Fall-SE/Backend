@@ -14,11 +14,13 @@ from sqlalchemy.orm.session import Session
 from sqlalchemy import or_
 from shared.auth import Token, authenticate_user, create_access_token, get_current_user, oauth2_scheme
 from shared.payment import create_payment
+from shared.linepay_service import create_order
 from datetime import datetime
 from config import Config
 import random
 import string
 from starlette.responses import FileResponse
+import requests
 
 
 db_dir = os.getcwd() + "/database/"
@@ -399,7 +401,8 @@ async def update_user_account(
     if not event:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此共乘事件")
     
-    ###todo: link to the Line Pay API
+    
+    
 
     return {"total_paid": "test"}
 
@@ -417,5 +420,48 @@ async def get_user_account(
     return res
 
 
+@app.post("/linepay_payment", status_code=status.HTTP_200_OK)
+async def linepay_handler(
+    userid: int,
+    eventid: int,
+    db: Session = Depends(get_db)):
+    
+    #check user_id
+    user = db.query(User).filter_by(id=userid).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此使用者")
+    
+    #check event_id
+    event = db.query(Event).filter_by(id=eventid).first()
+    if not event:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此共乘事件")
+    
+    #link to the LinePay API
+    linepay_payload = create_order(user, event, db)
+    
+    # print("-------------------")
+    # print(linepay_payload["url"])
+    # print(linepay_payload["body"])
+    # print(linepay_payload["headers"])
+    # print("-------------------")
+    linepay_res = requests.post(linepay_payload["url"], 
+                                data=linepay_payload["body"], 
+                                headers=linepay_payload["headers"]
+                                )
+    
+    linepay_res_dict = json.loads(linepay_res.text)
+    # for i in linepay_res_dict:
+    #     print("key: ", i, "val: ", linepay_res_dict[i])
+        
+    print(linepay_res.__dict__)
+ 
+    return 1
+    
+    
+    
+
+
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", reload=True)
+    
+

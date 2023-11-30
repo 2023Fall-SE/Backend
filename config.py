@@ -18,3 +18,8 @@ class Config(object):
 
     ENVIRONMENT = os.getenv("ENVIRONMENT")
     RELEASE_VERSION = "0.0.1"
+    
+    LINE_PAY_CHANNELID="2001918325"
+    LINE_PAY_SECRET="3890889e7730561c29fb4f9956f0910b"
+    LINE_PAY_VERSION="v3"
+    LINE_PAY_SITE="https://sandbox-api-pay.line.me"
