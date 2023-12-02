@@ -7,7 +7,7 @@ on:
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   SERVICE_NAME: create-react-app
-  RUN_REGION: us-central1
+  REGION: us-central1
   python-version: '3.9'
 
 jobs:
@@ -25,14 +25,23 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-        
-          
-      - uses: google-github-actions/setup-gcloud@v1
+
+      - name: Build Docker Image
+        run: |
+          docker build -t gcr.io/${PROJECT_ID}/carpool_service_test .
+          echo "${{ secrets.GCP_SA_KEY }}" | docker login -u _json_key --password-stdin https://gcr.io
+          docker push gcr.io/${PROJECT_ID}/carpool_service_test
+
+      - name: Deploy to Cloud Run
+        uses: GoogleCloudPlatform/github-actions/cloud-run@main
         with:
-          service_account_email: ${{ secrets.GCP_SA_EMAIL }}
-          service_account_key: ${{ secrets.GCP_SA_KEY }}
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
-          export_default_credentials: true
+          service: ${{ env.SERVICE_NAME }}
+          region: ${{ env.REGION }}
+          image: gcr.io/${PROJECT_ID}/carpool_service_test
+          platform: managed
+        env:
+          PROJECT_ID: ${{ env.PROJECT_ID }}
+          CLOUD_RUN_REGION: ${{ env.REGION }}
 
       - name: Info
         run: gcloud info

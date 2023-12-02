@@ -21,13 +21,20 @@ class CreateEventBase(BaseModel):
     number_of_people : int = Field(ge=2, le=7)
     start_location : str
     end_location : str
-    other_location : list[str]
+    other_location : list[str]  
+    acc_payable: confloat(ge=1, le=1000) = Field(default=100)
 
 class UserId(BaseModel):
     user_id : int
 
-class EventId(BaseModel):
+class EventJoin(BaseModel):
     event_id : int
+    user_id: int
+    start_loc: str
+    end_loc: str
+
+class EventId(BaseModel):
+    event_id: int
 
 class FindLocationForm(BaseModel):
     start_location:str
