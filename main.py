@@ -15,12 +15,14 @@ from sqlalchemy import or_
 from shared.auth import Token, authenticate_user, create_access_token, get_current_user, oauth2_scheme
 from shared.payment import create_payment
 from shared.linepay_service import create_order
+from shared.pusher_util import send_push_notification
 from datetime import datetime
 from config import Config
 import random
 import string
 from starlette.responses import FileResponse
 import requests
+from httpx import AsyncClient
 
 
 db_dir = os.getcwd() + "/database/"
@@ -185,7 +187,7 @@ def carpool_chat_room(eventID:int, db: Session = Depends(get_db)):
 
 # (7) 結束此共乘
 @app.post("/end-the-carpool", status_code=status.HTTP_200_OK)
-def end_the_carpool(eventID:EventId, db: Session = Depends(get_db)):
+async def end_the_carpool(eventID:EventId, db: Session = Depends(get_db)):
     event = db.query(Event).filter_by(id = eventID.event_id).first()
     if not event:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此Event")
@@ -198,7 +200,19 @@ def end_the_carpool(eventID:EventId, db: Session = Depends(get_db)):
     oncreate = create_payment(event, db) #create Payment instances for joiners and calculate payables respectively
     if not oncreate:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Payment創建失敗")
-
+    
+    #send reward notification to initiator on success
+    if event.end_time > event.start_time:
+        rewardapi_url = f"{Config.BACKEND_URL}/send-reward/{event.initiator}"
+        
+        async with AsyncClient() as client:
+            response = await client.post(rewardapi_url)
+        
+        if response.status_code != 200:
+            raise HTTPException(status_code=response.status_code, detail=response.text)
+        # print("----------------------------")
+        # print(response.json())
+        
     return {"result" : "success"}
 
 
@@ -272,7 +286,7 @@ async def update_user(
     #hash the new password
     if password:
         salt = bcrypt.gensalt()
-        hashed_pwd = bcrypt.hashpw(password.encode('utf8'), salt)
+        password = bcrypt.hashpw(password.encode('utf8'), salt)
 
     #ensure no repeated phone, mail, d_name
     if display_name:
@@ -290,7 +304,7 @@ async def update_user(
         if user_with_mail and user_with_mail.id != user_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="此信箱已被使用")
         
-    update_dict = {"password": hashed_pwd, 
+    update_dict = {"password": password, 
                    "phone": phone, 
                    "display_name": display_name, 
                    "mail": mail,
@@ -298,8 +312,9 @@ async def update_user(
     update_dict_notnull = {key: update_dict[key] for key in update_dict if update_dict[key] is not None}
 
 
-    db.query(User).filter_by(id=user_id).update(update_dict_notnull)
-    db.commit()
+    if update_dict_notnull:
+        db.query(User).filter_by(id=user_id).update(update_dict_notnull)
+        db.commit()
 
     return {"user_id": user_id}
 
@@ -456,11 +471,32 @@ async def linepay_handler(
     print(linepay_res.__dict__)
  
     return 1
-    
-    
-    
 
+#notification
+@app.post("/send-reward/{userid}", status_code=status.HTTP_200_OK)
+async def send_pusher_notification(
+    userid: int, 
+    db: Session = Depends(get_db)):
+    
+    #check user_id
+    user = db.query(User).filter_by(id=userid).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此使用者")
+    
+    #group name: "hello"
+    payload = {
+        "interests":["hello"],
+        "web":{
+            "notification":{
+                "title":"通知",
+                "body":"您有新獎勵!!!"
+            }
+        }
+    }
 
+    result = await send_push_notification(Config.PUSHER_INSTANCE_ID, Config.PUSHER_SECRET, payload)
+    return {"result": result}
+    
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", reload=True)
     
