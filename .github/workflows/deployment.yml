@@ -7,41 +7,41 @@ on:
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   SERVICE_NAME: create-react-app
-  RUN_REGION: us-central1
+  REGION: us-central1
+  python-version: '3.9'
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: [3.9]
 
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v2
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v1
+      - uses: actions/checkout@v2
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v4
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r ./Backend/requirements.txt
-        
-      - name: Run Tests
+          pip install -r requirements.txt
+
+      - name: Build Docker Image
         run: |
-          cd Backend
-          python main.py
-          
-      - uses: GoogleCloudPlatform/github-actions/setup-gcloud@master
+          docker build -t gcr.io/${PROJECT_ID}/carpool_service_test .
+          echo "${{ secrets.GCP_SA_KEY }}" | docker login -u _json_key --password-stdin https://gcr.io
+          docker push gcr.io/${PROJECT_ID}/carpool_service_test
+
+      - name: Deploy to Cloud Run
+        uses: GoogleCloudPlatform/github-actions/cloud-run@main
         with:
-          version: '286.0.0'
-          service_account_email: ${{ secrets.GCP_SA_EMAIL }}
-          service_account_key: ${{ secrets.GCP_SA_KEY }}
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
-          export_default_credentials: true
+          service: ${{ env.SERVICE_NAME }}
+          region: ${{ env.REGION }}
+          image: gcr.io/${PROJECT_ID}/carpool_service_test
+          platform: managed
+        env:
+          PROJECT_ID: ${{ env.PROJECT_ID }}
+          CLOUD_RUN_REGION: ${{ env.REGION }}
 
       - name: Info
         run: gcloud info
