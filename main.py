@@ -58,7 +58,7 @@ def token_check(token: Annotated[str, Depends(oauth2_scheme)], db: Session = Dep
     else:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized.")
 
-@app.post("/login", status_code=status.HTTP_200_OK, response_model=Token)
+@app.post("/login", status_code=status.HTTP_200_OK, response_model=dict)
 def user_login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: Session = Depends(get_db)):
     username, password = form_data.username, form_data.password
     user = authenticate_user(db, User, username, password)
