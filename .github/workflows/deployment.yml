@@ -21,18 +21,16 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
       - uses: google-github-actions/auth@v1
+        id: auth
         with:
           project_id: ${{ env.PROJECT_ID }}
           credentials_json: ${{ secrets.GCP_SA_KEY }}
+          create_credentials_file: true
 
       - name: Build Docker Image
         run: |
+          gcloud auth login --brief --cred-file="${{ steps.auth.outputs.credentials_file_path }}"
           docker build -t gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE }}:01 .
           docker push gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE }}:01
 
