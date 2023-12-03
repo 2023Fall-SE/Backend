@@ -7,7 +7,7 @@ on:
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   SERVICE: carpool_service_test
-  REGION: us-central1
+  REGION: asia-east1
   python-version: '3.9'
 
 jobs:
@@ -32,7 +32,7 @@ jobs:
       - name: Build Docker Image
         run: |
           docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.SERVICE }}:01 .
-          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.SERVICE }}:01
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/carpool-service-test/${{ env.SERVICE }}:01
 
       - id: deploy
         uses: google-github-actions/deploy-cloudrun@v1
