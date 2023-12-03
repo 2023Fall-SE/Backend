@@ -27,12 +27,12 @@ jobs:
           project_id: ${{ env.PROJECT_ID }}
           credentials_json: ${{ secrets.GCP_SA_KEY }}
           create_credentials_file: true
+          registry: ${{ env.REGION }}-docker.pkg.dev
 
       - name: Build Docker Image
         run: |
-          gcloud auth login --brief --cred-file="${{ steps.auth.outputs.credentials_file_path }}"
-          docker build -t gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE }}:01 .
-          docker push gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE }}:01
+          docker build -t ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.SERVICE }}:01 .
+          docker push ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.SERVICE }}:01
 
       - id: deploy
         uses: google-github-actions/deploy-cloudrun@v1
