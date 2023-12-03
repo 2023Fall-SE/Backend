@@ -27,11 +27,11 @@ jobs:
           project_id: ${{ env.PROJECT_ID }}
           credentials_json: ${{ secrets.GCP_SA_KEY }}
           create_credentials_file: true
-          registry: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/carpool-service-test
 
       - name: Build Docker Image
         run: |
           docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/carpool-service-test/${{ env.SERVICE }}:01 .
+          gcloud auth print-access-token | docker login -u oauth2accesstoken --password-stdin https://{{ env.REGION }}-docker.pkg.dev
           docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/carpool-service-test/${{ env.SERVICE }}:01
 
       - id: deploy
