@@ -31,7 +31,7 @@ jobs:
 
       - name: Build Docker Image
         run: |
-          docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.SERVICE }}:01 .
+          docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/carpool-service-test/${{ env.SERVICE }}:01 .
           docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/carpool-service-test/${{ env.SERVICE }}:01
 
       - id: deploy
