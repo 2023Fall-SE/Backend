@@ -31,7 +31,7 @@ def create_payment(event: Event, db: Session = Depends(get_db)):
     
     return 1
 
-#calculate the amount of money to be paid by the user_id
+#calculate payable by the user_id
 def calculate_payable(userid: int, event: Event, joiner_list: list, db: Session = Depends(get_db)):
 
     joiner_loc = event.joiner_to_location.split(",") #['1-3', '2-3']
