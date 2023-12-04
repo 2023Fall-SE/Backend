@@ -69,7 +69,7 @@ def user_login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: S
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="帳號或密碼錯誤")
     else:
         user_token = create_access_token({"user_id": user.id})
-        res = Token(access_token=user_token, token_type="bearer", user_id=str(user.id))
+        res = Token(access_token=user_token, token_type="bearer", user_id=user.id)
         return res
 
 @app.post("/user", status_code=status.HTTP_201_CREATED, tags=["users"])
@@ -174,6 +174,9 @@ def join_the_carpool(token: Annotated[str, Depends(oauth2_scheme)], eventForm:Ev
 @app.get("/search-joined-event", status_code=status.HTTP_200_OK, tags=["events"])
 def search_joined_event(token: Annotated[str, Depends(oauth2_scheme)], user_id:int, db: Session = Depends(get_db)):
     # user_id = str(user.user_id)
+    token_user = get_current_user(db, User, token)
+    if token_user.id != user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="使用者無此權限")
     search = "%{}%".format("," + str(user_id) + ",")
     events = db.query(Event).filter(Event.joiner.like(search)).all()
     print(search)
