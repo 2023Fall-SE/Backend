@@ -19,7 +19,7 @@ VOLUME ["/app/license"]
 VOLUME ["/app/database"]
 
 # 開放 FastAPI 服務埠
-EXPOSE 8000
+EXPOSE 8080
 
 # 定義啟動應用程式的指令
 CMD python /app/main.py

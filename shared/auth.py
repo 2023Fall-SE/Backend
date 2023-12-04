@@ -13,7 +13,7 @@ class TokenData(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
-    user_id: str
+    user_id: int
 
 def verify_password(plain_password, hashed_password):
     return bcrypt.checkpw(plain_password, hashed_password)

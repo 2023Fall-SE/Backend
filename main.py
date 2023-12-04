@@ -33,6 +33,7 @@ if not os.path.isdir(db_dir):
 if not os.path.isdir(Config.LICENSE_UPLOAD_PATH):
     os.mkdir(Config.LICENSE_UPLOAD_PATH)
 
+
 model.Base.metadata.create_all(bind=engine)
 app = FastAPI()
 origins = [
@@ -51,7 +52,8 @@ def get_db():
     finally:
         db.close()
 
-@app.post("/token-check", status_code=status.HTTP_200_OK)
+
+@app.post("/token-check", status_code=status.HTTP_200_OK , tags=["auth"])
 def token_check(token: Annotated[str, Depends(oauth2_scheme)], db: Session = Depends(get_db)):
     user = get_current_user(db, User, token)
     if user:
@@ -59,7 +61,7 @@ def token_check(token: Annotated[str, Depends(oauth2_scheme)], db: Session = Dep
     else:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized.")
 
-@app.post("/login", status_code=status.HTTP_200_OK, response_model=dict)
+@app.post("/login", status_code=status.HTTP_200_OK, response_model=Token, tags=["auth"])
 def user_login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: Session = Depends(get_db)):
     username, password = form_data.username, form_data.password
     user = authenticate_user(db, User, username, password)
@@ -67,12 +69,14 @@ def user_login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: S
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="帳號或密碼錯誤")
     else:
         user_token = create_access_token({"user_id": user.id})
-        res = Token(access_token=user_token, token_type="bearer", user_id=str(user.id))
+        res = Token(access_token=user_token, token_type="bearer", user_id=user.id)
         return res
 
-@app.post("/user", status_code=status.HTTP_201_CREATED)
+@app.post("/user", status_code=status.HTTP_201_CREATED, tags=["users"])
 def create_user(user_form: UserCreate, db: Session = Depends(get_db)):
     username, password, display_name, phone, mail = user_form.username, user_form.password, user_form.display_name, user_form.phone, user_form.mail
+    if mail:
+        mail = mail.lower()
     is_exist = db.query(User).filter_by(username=username).first()
 
     if is_exist:
@@ -107,8 +111,9 @@ def create_user(user_form: UserCreate, db: Session = Depends(get_db)):
     return {"user_id": user.id}
 
 # (5)搜尋
-@app.get("/find-carpool", status_code=status.HTTP_200_OK)
-def find_carpool(startLocation:str, endLocation:str, db: Session = Depends(get_db)):
+@app.get("/find-carpool", status_code=status.HTTP_200_OK, tags=["events"])
+def find_carpool(token: Annotated[str, Depends(oauth2_scheme)], startLocation:str, endLocation:str, db: Session = Depends(get_db)):
+    
     # find SQL
     # startLocation, endLocation = location.start_location, location.end_location
     # events = db.query(Event).filter(Event.available_seats > -1).all()
@@ -126,9 +131,13 @@ def find_carpool(startLocation:str, endLocation:str, db: Session = Depends(get_d
 
 
 # (6)加入此共乘     建議把上下 及搜尋刪除
-@app.post("/join-the-carpool", status_code=status.HTTP_200_OK)
-def join_the_carpool(eventForm:EventJoin, db: Session = Depends(get_db)):
+@app.post("/join-the-carpool", status_code=status.HTTP_200_OK, tags=["events"])
+def join_the_carpool(token: Annotated[str, Depends(oauth2_scheme)], eventForm:EventJoin, db: Session = Depends(get_db)):
     event = db.query(Event).filter_by(id=eventForm.event_id).first()
+
+    token_user = get_current_user(db, User, token)
+    if token_user.id !=eventForm.user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="使用者無此權限")
 
     if not event:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此Event")
@@ -162,9 +171,12 @@ def join_the_carpool(eventForm:EventJoin, db: Session = Depends(get_db)):
 
 
 # (7)(8) 已加入的共乘
-@app.get("/search-joined-event", status_code=status.HTTP_200_OK)
-def search_joined_event(user_id:int, db: Session = Depends(get_db)):
+@app.get("/search-joined-event", status_code=status.HTTP_200_OK, tags=["events"])
+def search_joined_event(token: Annotated[str, Depends(oauth2_scheme)], user_id:int, db: Session = Depends(get_db)):
     # user_id = str(user.user_id)
+    token_user = get_current_user(db, User, token)
+    if token_user.id != user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="使用者無此權限")
     search = "%{}%".format("," + str(user_id) + ",")
     events = db.query(Event).filter(Event.joiner.like(search)).all()
     print(search)
@@ -176,24 +188,65 @@ def search_joined_event(user_id:int, db: Session = Depends(get_db)):
 
 
 # (7)(8) 共乘聊天室
-@app.get("/carpool-chat-room/{eventID}", status_code=status.HTTP_200_OK)
-def carpool_chat_room(eventID:int, db: Session = Depends(get_db)):
+@app.get("/carpool-chat-room/{eventID}", status_code=status.HTTP_200_OK, tags=["events"])
+def carpool_chat_room(token: Annotated[str, Depends(oauth2_scheme)], eventID:int, db: Session = Depends(get_db)):
    # find SQL
    # add the info to DB
    # return chat_room
    return {"result" : "success"}
 
-
-# (7) 結束此共乘
-@app.post("/end-the-carpool", status_code=status.HTTP_200_OK)
-async def end_the_carpool(eventID:EventId, db: Session = Depends(get_db)):
+# (7) 解散event
+@app.post("/dismiss-the-carpool", status_code=status.HTTP_200_OK , tags=["events"])
+async def dismiss_the_carpool(token: Annotated[str, Depends(oauth2_scheme)], eventID:EventId, db: Session = Depends(get_db)):
     event = db.query(Event).filter_by(id = eventID.event_id).first()
     if not event:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此Event")
+
+    token_user = get_current_user(db, User, token)
+    if token_user.id != event.initiator:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="使用者無此權限")
+
     if event.end_time != None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Event已結束")
     db.query(Event).filter_by(id=eventID.event_id).update({'end_time':datetime.now()})
     db.query(Event).filter_by(id=eventID.event_id).update({'available_seats':0})
+    event.status = "dismiss"
+    db.commit()
+    
+    #create payment and send reward notification to initiator on success
+    if event.end_time > event.start_time:
+        oncreate = create_payment(event, db) #create Payment instances for joiners and calculate payables respectively
+        if not oncreate:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Payment創建失敗")
+        
+        rewardapi_url = f"{Config.BACKEND_URL}/send-reward/{event.initiator}"
+        
+        async with AsyncClient() as client:
+            response = await client.post(rewardapi_url)
+        
+        if response.status_code != 200:
+            raise HTTPException(status_code=response.status_code, detail=response.text)
+        
+    return {"result" : "success"}
+
+
+# (7) 結束此共乘
+@app.post("/end-the-carpool", status_code=status.HTTP_200_OK, tags=["events"])
+async def end_the_carpool(token: Annotated[str, Depends(oauth2_scheme)], eventID:EventId, db: Session = Depends(get_db)):
+
+    event = db.query(Event).filter_by(id = eventID.event_id).first()
+    if not event:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此Event")
+
+    token_user = get_current_user(db, User, token)
+    if token_user.id != event.initiator:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="使用者無此權限")
+
+    if event.end_time != None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Event已結束")
+    db.query(Event).filter_by(id=eventID.event_id).update({'end_time':datetime.now()})
+    db.query(Event).filter_by(id=eventID.event_id).update({'available_seats':0})
+    event.status = "end"
     db.commit()
     
     #create payment and send reward notification to initiator on success
@@ -214,9 +267,14 @@ async def end_the_carpool(eventID:EventId, db: Session = Depends(get_db)):
 
 
 # (7) 離開此共乘
-@app.post("/leave-the-carpool", status_code=status.HTTP_200_OK)
-def leave_the_carpool(eventIdAndUserId:EventIdAndUserId, db: Session = Depends(get_db)):
+@app.post("/leave-the-carpool", status_code=status.HTTP_200_OK, tags=["events"])
+def leave_the_carpool(token: Annotated[str, Depends(oauth2_scheme)], eventIdAndUserId:EventIdAndUserId, db: Session = Depends(get_db)):
     event_id, user_id = eventIdAndUserId.event_id, eventIdAndUserId.user_id
+    
+    token_user = get_current_user(db, User, token)
+    if token_user.id != user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="使用者無此權限")
+
     event = db.query(Event).filter_by(id = event_id).first()
     if not event:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此Event")
@@ -254,10 +312,18 @@ def leave_the_carpool(eventIdAndUserId:EventIdAndUserId, db: Session = Depends(g
 
 # (10) 新增共乘, otherLocation use comma to split
 # @app.get("/InitiateCarpoolEventUI/{userID}/{numberOfPeople}/{selfdriveOrNot}/{startLocation}/{endLocation}/{otherLocation}")
-@app.post("/initiate-carpool-event", status_code=status.HTTP_200_OK)
-def create_new_carpool(eventForm: CreateEventBase, db: Session = Depends(get_db)):
+@app.post("/initiate-carpool-event", status_code=status.HTTP_200_OK, tags=["events"])
+def create_new_carpool(token: Annotated[str, Depends(oauth2_scheme)], eventForm: CreateEventBase, db: Session = Depends(get_db)):
     # user_id, initiator, start_time, self_drive_or_not, number_of_people, start_location,
     user_id, start_time, self_drive_or_not, number_of_people, acc_payable, status = eventForm.user_id, eventForm.start_time, eventForm.self_drive_or_not, eventForm.number_of_people, eventForm.acc_payable, eventForm.status
+    
+    token_user = get_current_user(db, User, token)
+    if token_user.id != user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="使用者無此權限")
+    
+    token_user = get_current_user(db, User, token)
+    if token_user.id != user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="使用者無此權限")
     
     #check user_id
     user = db.query(User).filter_by(id=eventForm.user_id).first()
@@ -292,7 +358,7 @@ def create_new_carpool(eventForm: CreateEventBase, db: Session = Depends(get_db)
                     available_seats=number_of_people-1,
                     accounts_payable=acc_payable,
                     joiner_to_location=f",0-{num_loc-1},",   #此attribute第一格為initiator之start, end地點
-                    status=status,
+                    status = "ongoing",
                 )
     db.add(addEvent)
     db.commit()
@@ -301,8 +367,9 @@ def create_new_carpool(eventForm: CreateEventBase, db: Session = Depends(get_db)
 
              
 # User Page Info
-@app.put("/update-user-info", status_code=status.HTTP_200_OK)
+@app.put("/update-user-info", status_code=status.HTTP_200_OK, tags=["users"])
 async def update_user(
+    token: Annotated[str, Depends(oauth2_scheme)], 
     userinfoForm: UserView,
     db: Session = Depends(get_db)):
 
@@ -313,6 +380,12 @@ async def update_user(
         userinfoForm.display_name,
         userinfoForm.mail,
     )
+    if mail:
+        mail = mail.lower()
+
+    token_user = get_current_user(db, User, token)
+    if token_user.id != user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="使用者無此權限")
 
     #check user_id
     user = db.query(User).filter_by(id=user_id).first()
@@ -354,8 +427,9 @@ async def update_user(
 
     return {"user_id": user_id}
 
-@app.get("/get-user-info/{userid}", status_code=status.HTTP_200_OK)
+@app.get("/get-user-info/{userid}", status_code=status.HTTP_200_OK, tags=["users"])
 async def get_user(
+    token: Annotated[str, Depends(oauth2_scheme)], 
     userid: int,
     db: Session = Depends(get_db)):
 
@@ -367,12 +441,17 @@ async def get_user(
     res = {"user_id": user.id, "phone": user.phone, "display_name": user.display_name, "mail": user.mail}
     return res
 
-@app.post("/update-user-license", status_code=status.HTTP_200_OK)  #assume license_file != NULL
+@app.post("/update-user-license", status_code=status.HTTP_200_OK, tags=["users"])  #assume license_file != NULL
 async def update_license(
+        token: Annotated[str, Depends(oauth2_scheme)], 
         userid: int,
         license_file: Annotated[UploadFile, File()],
         db: Session = Depends(get_db),
     ):
+
+    token_user = get_current_user(db, User, token)
+    if token_user.id != userid:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="使用者無此權限")
 
     #check user_id
     user = db.query(User).filter_by(id=userid).first()
@@ -403,12 +482,17 @@ async def update_license(
 
     return {"license_file": userid}
 
-@app.get("/get-user-license/{userid}", status_code=status.HTTP_200_OK)
+@app.get("/get-user-license/{userid}", status_code=status.HTTP_200_OK, tags=["users"])
 async def get_license(
+    token: Annotated[str, Depends(oauth2_scheme)], 
     userid: int,
     db: Session = Depends(get_db)):
 
     #check user_id
+    token_user = get_current_user(db, User, token)
+    if token_user.id != userid:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="使用者無此權限")
+
     user = db.query(User).filter_by(id=userid).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此使用者")
@@ -419,10 +503,15 @@ async def get_license(
     license_path = os.path.join(Config.LICENSE_UPLOAD_PATH, user.license)
     return FileResponse(license_path, media_type='image',filename=user.license)
 
-@app.delete("/delete-user-license/{userid}", status_code=status.HTTP_200_OK)
+@app.delete("/delete-user-license/{userid}", status_code=status.HTTP_200_OK, tags=["users"])
 async def delete_license(
+    token: Annotated[str, Depends(oauth2_scheme)], 
     userid: int,
     db: Session = Depends(get_db)):
+
+    token_user = get_current_user(db, User, token)
+    if token_user.id != userid:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="使用者無此權限")
 
     #check user_id
     user = db.query(User).filter_by(id=userid).first()
@@ -437,12 +526,17 @@ async def delete_license(
 
 # Payment
 #end event->get_user_payment->(when user clicks payment button)handle_payable->Line Pay...
-@app.post("/payable", status_code=status.HTTP_200_OK)
+@app.post("/payable", status_code=status.HTTP_200_OK, tags=["payments"])
 async def handle_payable(
+    token: Annotated[str, Depends(oauth2_scheme)], 
     userid: int,
     eventid: int,
     useCarpoolmoney: bool,
     db: Session = Depends(get_db)):
+
+    token_user = get_current_user(db, User, token)
+    if token_user.id != userid:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="使用者無此權限")
 
     #check user_id
     user = db.query(User).filter_by(id=userid).first()
@@ -490,11 +584,16 @@ async def handle_payable(
     
     return {"user_id": userid, "event_id": eventid, "payment_id": payment.id, "payment_url": response.json()["payment_url"]}
 
-@app.get("/payment/{userid}", status_code=status.HTTP_200_OK)
+@app.get("/payment/{userid}", status_code=status.HTTP_200_OK, tags=["payments"])
 async def get_user_payment(    #call on event completion
+    token: Annotated[str, Depends(oauth2_scheme)], 
     userid: int,
     eventid: int,
     db: Session = Depends(get_db)):
+    
+    token_user = get_current_user(db, User, token)
+    if token_user.id != userid:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="使用者無此權限")
 
     #check user_id
     user = db.query(User).filter_by(id=userid).first()
@@ -513,11 +612,16 @@ async def get_user_payment(    #call on event completion
     res = {"user_id": userid, "event_id": eventid, "payable": payment.money, "carpool_money": user.carpool_money}
     return res
 
-@app.get("/payable/{userid}", status_code=status.HTTP_200_OK)
+@app.get("/payable/{userid}", status_code=status.HTTP_200_OK, tags=["payments"])
 async def get_event_payable_info(
+    token: Annotated[str, Depends(oauth2_scheme)], 
     userid: int,
     eventid: int,
     db: Session = Depends(get_db)):
+
+    token_user = get_current_user(db, User, token)
+    if token_user.id != userid:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="使用者無此權限")
 
     #check user_id
     user = db.query(User).filter_by(id=userid).first()
@@ -537,13 +641,21 @@ async def get_event_payable_info(
     res = {"user_id": userid, "event_id": eventid, "payable": payable.money, "isCompleted": payable.isCompleted}
     return res
 
-@app.post("/linepay-request", status_code=status.HTTP_200_OK)
+
+
+@app.post("/linepay-request", status_code=status.HTTP_200_OK, tags=["linepay"])
 async def linepay_request_payment(
     # userid: int,
     # eventid: int,
     # payable: int,
+    token: Annotated[str, Depends(oauth2_scheme)], 
     payload: LinePayPayload,
     db: Session = Depends(get_db)):
+
+    token_user = get_current_user(db, User, token)
+    if token_user.id != payload.userid:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="使用者無此權限")
+
 
     user = db.query(User).filter_by(id=payload.userid).first()
     event = db.query(Event).filter_by(id=payload.eventid).first()
@@ -572,7 +684,7 @@ async def linepay_request_payment(
     return {"payment_url": payment_url}
 
 
-@app.post("/linepay-confirm", status_code=status.HTTP_200_OK)
+@app.post("/linepay-confirm", status_code=status.HTTP_200_OK, tags=["linepay"])
 async def linepay_confirm_payment(
     userid: int,
     eventid: int,
@@ -615,7 +727,7 @@ async def linepay_confirm_payment(
     return {"payment": "success"}
 
 #notification
-@app.post("/send-reward/{userid}", status_code=status.HTTP_200_OK)
+@app.post("/send-reward/{userid}", status_code=status.HTTP_200_OK, tags=["notification"])
 async def send_reward_notification(
     userid: int, 
     db: Session = Depends(get_db)):
@@ -639,7 +751,7 @@ async def send_reward_notification(
     result = await send_push_notification(Config.PUSHER_INSTANCE_ID, Config.PUSHER_SECRET, payload)
     return {"result": result}
 
-@app.post("/send-payable/{userid}", status_code=status.HTTP_200_OK)
+@app.post("/send-payable/{userid}", status_code=status.HTTP_200_OK, tags=["notification"])
 async def send_payment_notification(
     userid: int, 
     db: Session = Depends(get_db)):
@@ -664,6 +776,6 @@ async def send_payment_notification(
     return {"result": result}
     
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", reload=True)
+    uvicorn.run("main:app", host="0.0.0.0",port=8080, reload=True)
     
 
