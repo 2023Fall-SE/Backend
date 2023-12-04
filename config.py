@@ -14,7 +14,8 @@ class Config(object):
 
     JWT_SECRET_KEY = "jwt_key_testing"
     JWT_ALGORITHM = "HS256"
-    JWT_ACCESS_TOKEN_EXPIRES = timedelta(seconds=60)
+    EXPIRE_SECOND = 60 * 60 *6
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(seconds=EXPIRE_SECOND)
 
     LICENSE_UPLOAD_PATH = os.path.abspath(os.getcwd()) + "/license/"
 
