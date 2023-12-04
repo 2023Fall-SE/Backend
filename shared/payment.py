@@ -25,6 +25,7 @@ def create_payment(event: Event, db: Session = Depends(get_db)):
             event_id=event.id,
             isCompleted=False,
             user_id=joiner_list[i],
+            useCarpoolmoney=False,
         )
         db.add(payment)
         db.commit()
@@ -35,6 +36,7 @@ def create_payment(event: Event, db: Session = Depends(get_db)):
 def calculate_payable(userid: int, event: Event, joiner_list: list, db: Session = Depends(get_db)):
 
     joiner_loc = event.joiner_to_location.split(",") #['1-3', '2-3']
+    joiner_loc = joiner_loc[1:-1]
     joiner_start_end_loc = [loc.split("-") for loc in joiner_loc]  #[['1', '3'], ['2', '3']]
     total_num_loc = 0
 

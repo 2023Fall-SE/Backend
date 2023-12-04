@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from fastapi.encoders import jsonable_encoder
 import hashlib
 from datetime import datetime
+import random
 
 '''
 <request payment: payload format>
@@ -46,47 +47,62 @@ def get_db():
     finally:
         db.close()
 
-def create_order(user: User, event: Event, db: Session = Depends(get_db)):
+def create_order(user: User, event: Event, payable: int, db: Session = Depends(get_db)):
     payment = db.query(Payment).filter_by(user_id=user.id, event_id=event.id).first()
     req_uri = "payments/request"
     req_url = f"{Config.LINE_PAY_SITE}/{Config.LINE_PAY_VERSION}/{req_uri}"
-    order_id = "TEST_2023_12" #unique order id
+
+    #check repeated order
+    if payment.isCompleted:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="此訂單先前已完成付款")
+    order_id = generate_random_orderid() #unique order id
     
     order = {
-        "amount" : int(payment.money),
+        "amount" : payable,
         "currency" : "TWD",
         "orderId" : order_id,
         "packages" : [
             {
                 "id" : "1",
-                "amount": int(payment.money),
+                "amount": payable,
                 "products" : [
                     {
                         "id" : payment.id,
                         "name" : "Carpool Payable",
                         # "imageUrl" : "https://pay-store.line.com/images/pen_brown.jpg",
                         "quantity" : 1,
-                        "price" : int(payment.money)
+                        "price" : payable
                     }
                 ]
             }
         ],
         "redirectUrls" : {
-            "confirmUrl" : "https://4ff7-59-115-198-214.ngrok-free.app/loginstate/search",
-            "cancelUrl" : "https://4ff7-59-115-198-214.ngrok-free.app/loginstate/search"
+            "confirmUrl" : "https://chat.openai.com/c/103bd661-430a-4e12-9c32-0519c750115a",
+            "cancelUrl" : "https://4ff7-59-115-198-214.ngrok-free.app/loginstate/ended"
         }
     }
     
     headers = create_header(req_uri, order)
-    return {"headers": headers, "body": order, "url": req_url}
+    return {"headers": headers, "body": order, "url": req_url, "order_id": order_id}
 
 def create_confirm(user: User, event: Event, db: Session = Depends(get_db)):
     payment = db.query(Payment).filter_by(user_id=user.id, event_id=event.id).first()
+    if not payment.transaction_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="此訂單尚未完成付款程序")
+
     req_uri = f"payments/{payment.transaction_id}/confirm"
     req_url = f"{Config.LINE_PAY_SITE}/{Config.LINE_PAY_VERSION}/{req_uri}"
+
+    if payment.useCarpoolmoney:
+        if payment.money > user.carpool_money:
+            payable = payment.money - user.carpool_money
+        else:
+            payable = 0
+    else:
+        payable = payment.money
     
     body = {
-        "amount": int(payment.money),
+        "amount": int(payable),
         "currency" : "TWD"
     }
     
@@ -97,19 +113,10 @@ def create_header(uri: str, body: dict):
     nonce = uuid.uuid4().hex
     ChannelSecret = Config.LINE_PAY_SECRET
     req_uri = f"/{Config.LINE_PAY_VERSION}/{uri}"
-    # json_body = json.dumps(body.__dict__)
-    # json_body = jsonable_encoder(body.dict)
     str_body = json.dumps(body)
-    
-    # print(type(json_body))
     
     datawithsecret = f"{ChannelSecret}{req_uri}{str_body}{nonce}"
     signature = encrypt(ChannelSecret, datawithsecret)
-    
-    # print("---------------")
-    # print(signature1)
-    # print("---------------")
-    # print(signature2)
     
     header = {
         "Content-Type": "application/json",
@@ -123,4 +130,6 @@ def create_header(uri: str, body: dict):
 def encrypt(keys, data):
     hmac_obj = hmac.new(keys.encode('utf-8'), data.encode('utf-8'), 'sha256')
     return base64.b64encode(hmac_obj.digest()).decode('utf-8')
-    
+
+def generate_random_orderid(length=8):
+    return ''.join([str(random.randint(0, 9)) for i in range(length)])

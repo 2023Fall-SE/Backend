@@ -40,13 +40,14 @@ class Payment(Base):
     注意: 付款的Payment 應在 Event 結束時被建立起來
 
     id: unique id
-    with_draw_or_top_up: 0 = 付款, 1 = 儲值
+    with_draw_or_top_up: 0 = 付款, 1 = 儲值   儲值功能取消，這行沒用
     money: 交易金額
     time: 交易時間 (Payment若為付款，付款時需要更新)
     event_id: Payment若為付款則為 FK to event 否則為 null
     isCompleted: Payment若為付款，則用來判斷用戶是否完成付款。
     user_id: 付款者
     transaction_id, order_id: Line Pay產生之訂單id，分別用於Conform APi & Unique transaction
+    useCarpoolmoney: User是否選擇用"所有"現有的Carpoolmoney付款
     """
 
     __tablename__ = "payment"
@@ -58,6 +59,8 @@ class Payment(Base):
     isCompleted = Column(Boolean, nullable=False)
     user_id = Column(Integer, ForeignKey('user.id'))
     transaction_id = Column(String(19))    #Line Pay Transaction Id
+    order_id = Column(String(8))           #Line Pay Order Id
+    useCarpoolmoney = Column(Boolean, nullable=False)
 
     def __repr__(self):
         return "<Payment %r>" % self.id
