@@ -6,7 +6,7 @@ on:
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  SERVICE: carpool_service_test
+  SERVICE: carpool-service-test
   REGION: asia-east1
   python-version: '3.9'
 
