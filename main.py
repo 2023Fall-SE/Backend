@@ -3,12 +3,12 @@ import os
 from typing import Annotated
 from fastapi import FastAPI, Depends, status, HTTPException, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import  OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.testclient import TestClient
 import bcrypt
 import model
 from model import User, Event, Payment
-from schema import UserCreate, CreateEventBase, UserId, EventJoin, EventId, FindLocationForm, UserView, UserLicense
+from schema import UserCreate, CreateEventBase, UserId, EventJoin, EventId, FindLocationForm, UserView, UserLicense, EventIdAndUserId
 from database import SessionLocal, engine
 import uvicorn
 from sqlalchemy.orm.session import Session
@@ -17,7 +17,7 @@ from shared.auth import Token, authenticate_user, create_access_token, get_curre
 from shared.payment import create_payment
 from shared.linepay_service import create_order, create_confirm
 from shared.pusher_util import send_push_notification
-from datetime import datetime
+from datetime import datetime, timedelta
 from config import Config
 import random
 import string
@@ -59,7 +59,7 @@ def token_check(token: Annotated[str, Depends(oauth2_scheme)], db: Session = Dep
     else:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized.")
 
-@app.post("/login", status_code=status.HTTP_200_OK, response_model=Token)
+@app.post("/login", status_code=status.HTTP_200_OK, response_model=dict)
 def user_login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: Session = Depends(get_db)):
     username, password = form_data.username, form_data.password
     user = authenticate_user(db, User, username, password)
@@ -67,7 +67,7 @@ def user_login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: S
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="帳號或密碼錯誤")
     else:
         user_token = create_access_token({"user_id": user.id})
-        res = Token(access_token=user_token, token_type="bearer")
+        res = Token(access_token=user_token, token_type="bearer", user_id=str(user.id))
         return res
 
 @app.post("/user", status_code=status.HTTP_201_CREATED)
@@ -116,8 +116,8 @@ def find_carpool(startLocation:str, endLocation:str, db: Session = Depends(get_d
     events = db.query(Event).filter(Event.location.like(search)).all()
     eventList = []
     for event in events:
-        temp_location= event.location[event.location.index(startLocation)+len(startLocation):]
-        if  (endLocation in temp_location):
+        temp_location = event.location[event.location.index(startLocation)+len(startLocation):]
+        if f",{endLocation}," in temp_location:
             eventList.append(event)
     # return
     if len(eventList) == 0:
@@ -154,7 +154,7 @@ def join_the_carpool(eventForm:EventJoin, db: Session = Depends(get_db)):
     event.available_seats = event.available_seats - 1
 
     start_loc_idx, end_loc_idx = loc_list.index(eventForm.start_loc), loc_list.index(eventForm.end_loc)
-    joiner_loc_str = f", {start_loc_idx-1}-{end_loc_idx-1}"
+    joiner_loc_str = f"{start_loc_idx-1}-{end_loc_idx-1},"
     event.joiner_to_location = event.joiner_to_location + joiner_loc_str
     db.commit()
 
@@ -215,10 +215,48 @@ async def end_the_carpool(eventID:EventId, db: Session = Depends(get_db)):
     return {"result" : "success"}
 
 
+# (7) 離開此共乘
+@app.post("/leave-the-carpool", status_code=status.HTTP_200_OK)
+def leave_the_carpool(eventIdAndUserId:EventIdAndUserId, db: Session = Depends(get_db)):
+    event_id, user_id = eventIdAndUserId.event_id, eventIdAndUserId.user_id
+    event = db.query(Event).filter_by(id = event_id).first()
+    if not event:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此Event")
+    if event.end_time != None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Event已結束")
+    if str(user_id) not in event.joiner:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="此user不在event")
+    if user_id == event.initiator:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="此user為initiator")
+    if (datetime.now() + timedelta(hours=1)) > event.start_time:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Event即將開始無法退出")
+
+    old_joiner = event.joiner
+    old_joiner = old_joiner.split(',')
+    user_position = old_joiner.index(str(user_id))
+    new_joiner = old_joiner[:user_position] + old_joiner[user_position+1:]
+    new_joiner = ','.join(new_joiner)
+    event.joiner = new_joiner
+
+    event.available_seats = event.available_seats + 1
+
+    old_joiner_to_location = event.joiner_to_location
+    old_joiner_to_location = old_joiner_to_location.split(',')
+    new_joiner_to_location = old_joiner_to_location[:user_position] + old_joiner_to_location[user_position+1:]
+    new_joiner_to_location = ','.join(new_joiner_to_location)
+    event.joiner_to_location = new_joiner_to_location
+    db.commit()
+
+    # oncreate = create_payment(event, db) #create Payment instances for joiners and calculate payables respectively
+    # if not oncreate:
+    #     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Payment創建失敗")
+
+    return {"result" : "success"}
+
 
 # (10) 新增共乘, otherLocation use comma to split
 # @app.get("/InitiateCarpoolEventUI/{userID}/{numberOfPeople}/{selfdriveOrNot}/{startLocation}/{endLocation}/{otherLocation}")
-@app.post("/initiate-carpool-event-ui", status_code=status.HTTP_200_OK)
+@app.post("/initiate-carpool-event", status_code=status.HTTP_200_OK)
 def create_new_carpool(eventForm: CreateEventBase, db: Session = Depends(get_db)):
     # user_id, initiator, start_time, self_drive_or_not, number_of_people, start_location,
     user_id, start_time, self_drive_or_not, number_of_people, acc_payable = eventForm.user_id, eventForm.start_time, eventForm.self_drive_or_not, eventForm.number_of_people, eventForm.acc_payable

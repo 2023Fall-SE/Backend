@@ -91,6 +91,7 @@ class Event(Base):
     number_of_people = Column(Integer)
     available_seats = Column(Integer)
     accounts_payable = Column(Float, nullable=False)
+    status = Column(String(100),  nullable=False)
 
 class Communication(Base):
     """
@@ -106,4 +107,15 @@ class Communication(Base):
     event_id = Column(Integer, ForeignKey('event.id'), nullable=False)
     sender = Column(String(100),  ForeignKey('user.id'), nullable=False)
     time = Column(DateTime, default=datetime.now())
+    content = Column(String(200), nullable=False)
+
+class Notification(Base):
+
+    __tablename__ = "notification"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('user.id'), nullable=False)
+    type = Column(String(100),  nullable=False)
+    time = Column(DateTime, default=datetime.now())
+    event_id = Column(Integer, ForeignKey('event.id'), nullable=False)
     content = Column(String(200), nullable=False)
