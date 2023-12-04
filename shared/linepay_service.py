@@ -12,6 +12,7 @@ import hashlib
 from datetime import datetime
 
 '''
+<request payment: payload format>
 {
     "amount" : 1,
     "currency" : "TWD",
@@ -49,11 +50,12 @@ def create_order(user: User, event: Event, db: Session = Depends(get_db)):
     payment = db.query(Payment).filter_by(user_id=user.id, event_id=event.id).first()
     req_uri = "payments/request"
     req_url = f"{Config.LINE_PAY_SITE}/{Config.LINE_PAY_VERSION}/{req_uri}"
+    order_id = "TEST_2023_12" #unique order id
     
     order = {
-        "amount" : 1,
+        "amount" : int(payment.money),
         "currency" : "TWD",
-        "orderId" : "TEST_2023_12",
+        "orderId" : order_id,
         "packages" : [
             {
                 "id" : "1",
@@ -70,14 +72,26 @@ def create_order(user: User, event: Event, db: Session = Depends(get_db)):
             }
         ],
         "redirectUrls" : {
-            "confirmUrl" : "https://pay-store.line.com/order/payment/authorize",
-            "cancelUrl" : "https://pay-store.line.com/order/payment/cancel"
+            "confirmUrl" : "https://4ff7-59-115-198-214.ngrok-free.app/loginstate/search",
+            "cancelUrl" : "https://4ff7-59-115-198-214.ngrok-free.app/loginstate/search"
         }
     }
     
     headers = create_header(req_uri, order)
     return {"headers": headers, "body": order, "url": req_url}
+
+def create_confirm(user: User, event: Event, db: Session = Depends(get_db)):
+    payment = db.query(Payment).filter_by(user_id=user.id, event_id=event.id).first()
+    req_uri = f"payments/{payment.transaction_id}/confirm"
+    req_url = f"{Config.LINE_PAY_SITE}/{Config.LINE_PAY_VERSION}/{req_uri}"
     
+    body = {
+        "amount": int(payment.money),
+        "currency" : "TWD"
+    }
+    
+    headers = create_header(req_uri, body)
+    return {"headers": headers, "body": body, "url": req_url}
 
 def create_header(uri: str, body: dict):
     nonce = uuid.uuid4().hex
