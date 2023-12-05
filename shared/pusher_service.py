@@ -1,6 +1,14 @@
 from httpx import AsyncClient
 from fastapi import FastAPI, HTTPException, Depends
 from typing import Dict
+from pusher_push_notifications import PushNotifications
+from config import Config
+
+beams_client = PushNotifications(
+    instance_id=Config.PUSHER_INSTANCE_ID,
+    secret_key=Config.PUSHER_SECRET,
+)
+
 
 async def send_push_notification(instance_id: str, secret_key: str, payload: Dict):
     url = f"https://{instance_id}.pushnotifications.pusher.com/publish_api/v1/instances/{instance_id}/publishes/interests"
@@ -17,3 +25,4 @@ async def send_push_notification(instance_id: str, secret_key: str, payload: Dic
         raise HTTPException(status_code=response.status_code, detail=response.text)
 
     return response.json()
+

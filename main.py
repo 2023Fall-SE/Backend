@@ -5,9 +5,10 @@ from fastapi import FastAPI, Depends, status, HTTPException, File, UploadFile, F
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.testclient import TestClient
+from fastapi.responses import JSONResponse
 import bcrypt
 import model
-from model import User, Event, Payment
+from model import User, Event, Payment, Notification
 from schema import UserCreate, CreateEventBase, UserId, EventJoin, EventId, FindLocationForm, UserView, UserLicense, EventIdAndUserId, LinePayPayload
 from database import SessionLocal, engine
 import uvicorn
@@ -16,7 +17,7 @@ from sqlalchemy import or_
 from shared.auth import Token, authenticate_user, create_access_token, get_current_user, oauth2_scheme
 from shared.payment import create_payment
 from shared.linepay_service import create_order, create_confirm
-from shared.pusher_util import send_push_notification
+from shared.pusher_service import send_push_notification, beams_client
 from datetime import datetime, timedelta
 from config import Config
 import random
@@ -260,11 +261,38 @@ async def end_the_carpool(token: Annotated[str, Depends(oauth2_scheme)], eventID
         if not oncreate:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Payment創建失敗")
         
-        rewardapi_url = f"{Config.BACKEND_URL}/send-reward/{event.initiator}"
+        payment_content = {
+            'web': {
+            'notification': {
+                'title': '共乘App有新訊息',
+                'body': f'共乘ID{event.id}之發起者已結束共乘，請至結束共乘頁面付款',
+            },
+            },
+        },
+        reward_content = {
+            'web': {
+            'notification': {
+                'title': '共乘App有新訊息',
+                'body': f'共乘ID{event.id}之發起者已結束共乘，您已獲得獎勵(50代幣)，請至用戶儲值頁面確認',
+            },
+            },
+        },
         
+        joiner_list = event.joiner.strip(',').split(',')
+        for i in range(len(joiner_list)):
+            notification = Notification(
+                user_id=joiner_list[i],
+                type="reward" if i is 0 else "payment",
+                time=datetime.now(),
+                event_id=event.id,
+                content=reward_content if i is 0 else payment_content,
+            )
+            db.add(notification)
+            db.commit()
+        
+        sendnodapi_url = f"{Config.BACKEND_URL}/pusher/send-notification"
         async with AsyncClient() as client:
-            response = await client.post(rewardapi_url)
-        
+            response = await client.post(url=sendnodapi_url, json={"eventid": event.id})
         if response.status_code != 200:
             raise HTTPException(status_code=response.status_code, detail=response.text)
         
@@ -627,9 +655,6 @@ async def get_user_payment(    #call on event completion
 
 @app.post("/linepay-request", status_code=status.HTTP_200_OK, tags=["linepay"])
 async def linepay_request_payment(
-    # userid: int,
-    # eventid: int,
-    # payable: int,
     token: Annotated[str, Depends(oauth2_scheme)], 
     payload: LinePayPayload,
     db: Session = Depends(get_db)):
@@ -735,53 +760,56 @@ async def linepay_rollback_payment(
     return {"content": "success"}
 
 #notification
-@app.post("/send-reward/{userid}", status_code=status.HTTP_200_OK, tags=["notification"])
-async def send_reward_notification(
+#尚未測試: 1. endevent後存db+發消息 2. 多個users同時收通知 3. beams_auth用token驗證(部屬db問題)
+@app.get("/pusher/beams-auth", status_code=status.HTTP_200_OK, tags=["notification"])
+async def beams_auth(
     userid: int, 
+    # token: Annotated[str, Depends(oauth2_scheme)], 
     db: Session = Depends(get_db)):
     
-    #check user_id
-    user = db.query(User).filter_by(id=userid).first()
-    if not user:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此使用者")
+    # token_user = get_current_user(db, User, token)
+    # if token_user.id != userid:
+    #     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="使用者無此權限")
     
-    #group name: "hello"
-    payload = {
-        "interests":["hello"],
-        "web":{
-            "notification":{
-                "title":"通知",
-                "body":"您有新獎勵!!!"
-            }
-        }
-    }
+    beams_token = beams_client.generate_token(str(userid))
+    # print(beams_token)
+    return JSONResponse(content=beams_token)
 
-    result = await send_push_notification(Config.PUSHER_INSTANCE_ID, Config.PUSHER_SECRET, payload)
-    return {"result": result}
 
-@app.post("/send-payable/{userid}", status_code=status.HTTP_200_OK, tags=["notification"])
-async def send_payment_notification(
-    userid: int, 
+@app.get("/pusher/send-notification/{userid}", status_code=status.HTTP_200_OK, tags=["notification"])
+def send_notification(
+    userid: int,   #for testing
+    # eventid: int,   #should be tested with endevent
     db: Session = Depends(get_db)):
     
-    #check user_id
-    user = db.query(User).filter_by(id=userid).first()
-    if not user:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此使用者")
+    # payment_notify = db.query(Notification).filter_by(event_id=eventid, type="payment").all()
+    # reward_notify = db.query(Notification).filter_by(event_id=eventid, type="reward").first()
+   
+    # reward_response = beams_client.publish_to_users(
+    #     user_ids=[str(reward_notify.user_id)],   #list of published userid
+    #     publish_body=reward_notify.content
+    # )
     
-    #group name: "hello"
-    payload = {
-        "interests":["hello"],
-        "web":{
-            "notification":{
-                "title":"繳款通知",
-                "body":"您有未付清款項!!!"
-            }
-        }
-    }
-
-    result = await send_push_notification(Config.PUSHER_INSTANCE_ID, Config.PUSHER_SECRET, payload)
-    return {"result": result}
+    # payment_response = beams_client.publish_to_users(
+    #     user_ids=[str(payment_notify[row].user_id) for row in payment_notify],   #list of published userid
+    #     publish_body=payment_notify[0].content
+    # )
+    
+    #for testing
+    response = beams_client.publish_to_users(
+        user_ids=[str(userid)],   #list of published userid
+        publish_body={
+            'web': {
+            'notification': {
+                'title': 'Test_title',
+                'body': 'Test_body',
+            },
+            },
+        },
+    )
+    
+    return 1
+    # return {"reward": reward_response['publishId'], "payment": payment_response['publishId']}
     
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0",port=8080, reload=True)
