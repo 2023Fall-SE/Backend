@@ -149,7 +149,6 @@ def join_the_carpool(token: Annotated[str, Depends(oauth2_scheme)], eventForm:Ev
     if str(user.id) in event.joiner:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="使用者已在此Event")
     
-
     #find the location id and update the joiner_to_loc column
     loc_list = event.location.split(',')
     if eventForm.start_loc not in loc_list:
@@ -157,6 +156,12 @@ def join_the_carpool(token: Annotated[str, Depends(oauth2_scheme)], eventForm:Ev
 
     if eventForm.end_loc not in loc_list or loc_list.index(eventForm.end_loc) <= loc_list.index(eventForm.start_loc):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="結束地點無效")
+    
+    checkpayment = db.query(Payment.isCompleted).filter(Payment.user_id.in_([eventForm.user_id])).all()
+    check_res = all(row[0] for row in checkpayment)
+    if not check_res:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="此用戶有未繳清款項")
+    
     
     newJoiner = event.joiner + str(user.id) + ','
     event.joiner = newJoiner
@@ -315,7 +320,7 @@ def leave_the_carpool(token: Annotated[str, Depends(oauth2_scheme)], eventIdAndU
 @app.post("/initiate-carpool-event", status_code=status.HTTP_200_OK, tags=["events"])
 def create_new_carpool(token: Annotated[str, Depends(oauth2_scheme)], eventForm: CreateEventBase, db: Session = Depends(get_db)):
     # user_id, initiator, start_time, self_drive_or_not, number_of_people, start_location,
-    user_id, start_time, self_drive_or_not, number_of_people, acc_payable, status = eventForm.user_id, eventForm.start_time, eventForm.self_drive_or_not, eventForm.number_of_people, eventForm.acc_payable, eventForm.status
+    user_id, start_time, self_drive_or_not, number_of_people, acc_payable = eventForm.user_id, eventForm.start_time, eventForm.self_drive_or_not, eventForm.number_of_people, eventForm.acc_payable
     
     token_user = get_current_user(db, User, token)
     if token_user.id != user_id:
@@ -346,6 +351,11 @@ def create_new_carpool(token: Annotated[str, Depends(oauth2_scheme)], eventForm:
     #assume no repeated location
     if len(list(dict.fromkeys(total_loc_list))) < len(total_loc_list):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="地點不可重複")
+    
+    checkpayment = db.query(Payment.isCompleted).filter(Payment.user_id.in_([eventForm.user_id])).all()
+    check_res = all(row[0] for row in checkpayment)
+    if not check_res:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="此用戶有未繳清款項")
 
     stops = ",".join(eventForm.other_location)
     wholeLocation = ',' + eventForm.start_location + ',' + stops + ',' + eventForm.end_location + ','
@@ -551,6 +561,11 @@ async def handle_payable(
     payment = db.query(Payment).filter_by(user_id=userid, event_id=eventid).first()
     if not payment:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此付款欄位")
+    if payment.isCompleted:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="此用戶已完成付款")
+    if payment.order_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="此用戶尚有待確認付款")
+        
 
     db.query(Payment).filter_by(user_id=user.id, event_id=event.id).update(dict(
             useCarpoolmoney=useCarpoolmoney,
@@ -562,26 +577,24 @@ async def handle_payable(
             payable = payment.money - user.carpool_money
         else:
             payable = 0
+            db.query(User).filter_by(id=userid).update(dict(
+                carpool_money=user.carpool_money-payment.money
+            ))
             db.query(Payment).filter_by(user_id=userid, event_id=eventid).update(dict(
                 isCompleted=1,
                 money=payable
             ))
-            db.query(User).filter_by(id=userid).update(dict(
-                carpool_money=user.carpool_money-payment.money
-            ))
             db.commit()
-            return {"payment": "success"}
+            return {"content": "success"}
     else:
         payable = payment.money
-    
-    payableapi_url = f"{Config.BACKEND_URL}/linepay-request"
         
+    payableapi_url = f"{Config.BACKEND_URL}/linepay-request"
+    headers = {"Authorization": f"Bearer {token}"}
+  
     async with AsyncClient() as client:
-        response = await client.post(payableapi_url, json={"userid": userid, "eventid": eventid, "payable": int(payable)})
+        response = await client.post(payableapi_url, headers=headers, json={"userid": userid, "eventid": eventid, "payable": int(payable)})
 
-    print(response.json())
-    print("----------------")
-    
     return {"user_id": userid, "event_id": eventid, "payment_id": payment.id, "payment_url": response.json()["payment_url"]}
 
 @app.get("/payment/{userid}", status_code=status.HTTP_200_OK, tags=["payments"])
@@ -612,37 +625,6 @@ async def get_user_payment(    #call on event completion
     res = {"user_id": userid, "event_id": eventid, "payable": payment.money, "carpool_money": user.carpool_money}
     return res
 
-@app.get("/payable/{userid}", status_code=status.HTTP_200_OK, tags=["payments"])
-async def get_event_payable_info(
-    token: Annotated[str, Depends(oauth2_scheme)], 
-    userid: int,
-    eventid: int,
-    db: Session = Depends(get_db)):
-
-    token_user = get_current_user(db, User, token)
-    if token_user.id != userid:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="使用者無此權限")
-
-    #check user_id
-    user = db.query(User).filter_by(id=userid).first()
-    if not user:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此使用者")
-    
-    #check event_id
-    event = db.query(Event).filter_by(id=eventid).first()
-    if not event:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此共乘事件")
-    
-    payable = db.query(Payment).filter_by(user_id=userid, event_id=eventid).first()
-    
-    if not payable:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="此共乘尚未結束")
-        
-    res = {"user_id": userid, "event_id": eventid, "payable": payable.money, "isCompleted": payable.isCompleted}
-    return res
-
-
-
 @app.post("/linepay-request", status_code=status.HTTP_200_OK, tags=["linepay"])
 async def linepay_request_payment(
     # userid: int,
@@ -656,7 +638,6 @@ async def linepay_request_payment(
     if token_user.id != payload.userid:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="使用者無此權限")
 
-
     user = db.query(User).filter_by(id=payload.userid).first()
     event = db.query(Event).filter_by(id=payload.eventid).first()
 
@@ -665,9 +646,6 @@ async def linepay_request_payment(
     
     async with AsyncClient() as client:
         response = await client.post(linepay_payload["url"], headers=linepay_payload["headers"], json=linepay_payload["body"])
-    
-    # print(response.json())
-    # print("----------------")
     
     if response.json()["returnCode"] != "0000":
         raise HTTPException(status_code=response.status_code, detail=response.json()["returnMessage"])
@@ -699,21 +677,25 @@ async def linepay_confirm_payment(
     event = db.query(Event).filter_by(id=eventid).first()
     if not event:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此共乘事件")
+    
+    payment = db.query(Payment).filter_by(user_id=userid, event_id=eventid).first()
+    if payment.isCompleted:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="此用戶已完成付款")
 
     linepay_confirm = create_confirm(user, event, db)
     
     async with AsyncClient() as client:
         response = await client.post(linepay_confirm["url"], headers=linepay_confirm["headers"], json=linepay_confirm["body"])
-
-    # print("--------")
-    # print(response.json())
-    # print(response.json().keys())
-
+    
     if response.json()["returnCode"] != "0000":
         raise HTTPException(status_code=response.status_code, detail=response.json()["returnMessage"])
 
-    payable = response.json()["info"]["packages"]["amount"]  
-    new_carpool_money = 0 if user.carpool_money <= payable else user.carpool_money - payable
+    
+    payable = response.json()["info"]["packages"][0]["amount"]
+    if payment.useCarpoolmoney:
+        new_carpool_money = 0 if user.carpool_money <= payment.money else user.carpool_money - payment.money
+    else:
+        new_carpool_money = user.carpool_money
  
     db.query(Payment).filter_by(user_id=userid, event_id=eventid).update(dict(
         isCompleted=1,
@@ -724,7 +706,33 @@ async def linepay_confirm_payment(
     ))
     db.commit()
     
-    return {"payment": "success"}
+    return {"content": "success"}
+
+#rollback if confirm failed
+@app.put("/linepay-rollback", status_code=status.HTTP_200_OK, tags=["linepay"])
+async def linepay_rollback_payment(
+    userid: int,
+    eventid: int,
+    db: Session = Depends(get_db)):
+    
+    #check user_id
+    user = db.query(User).filter_by(id=userid).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此使用者")
+    
+    #check event_id
+    event = db.query(Event).filter_by(id=eventid).first()
+    if not event:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此共乘事件")
+    
+    db.query(Payment).filter_by(user_id=userid, event_id=eventid).update(dict(
+        transaction_id=None,
+        order_id=None,
+        useCarpoolmoney=False,
+    ))
+    db.commit()
+    
+    return {"content": "success"}
 
 #notification
 @app.post("/send-reward/{userid}", status_code=status.HTTP_200_OK, tags=["notification"])

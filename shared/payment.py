@@ -23,7 +23,7 @@ def create_payment(event: Event, db: Session = Depends(get_db)):
             with_draw_or_top_up=0,
             money=calculate_payable(joiner_list[i], event, joiner_list, db),
             event_id=event.id,
-            isCompleted=False,
+            isCompleted=False if i != 0 else True,  #initiator is auto. completed
             user_id=joiner_list[i],
             useCarpoolmoney=False,
         )

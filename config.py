@@ -4,7 +4,7 @@ from datetime import timedelta
 
 load_dotenv()
 class Config(object):
-    BACKEND_URL="http://127.0.0.1:8000"
+    BACKEND_URL="http://127.0.0.1:8080"
     
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     DB_PATH = os.path.abspath(os.getcwd()) + "/database/carpool_test.db"

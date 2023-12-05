@@ -23,7 +23,6 @@ class CreateEventBase(BaseModel):
     end_location : str
     other_location : list[str]  
     acc_payable: confloat(ge=1, le=1000) = Field(default=100)
-    status: str
 
 class UserId(BaseModel):
     user_id : int
