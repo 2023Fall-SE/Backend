@@ -14,4 +14,5 @@ sqlalchemy
 httpx
 pusher_push_notifications
 mysqlclient
-mysql-connector-python
+pymysql
+cloud-sql-python-connector
