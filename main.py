@@ -677,6 +677,24 @@ async def get_user_payment(    #call on event completion
     res = {"user_id": userid, "event_id": eventid, "payable": payment.money, "carpool_money": user.carpool_money}
     return res
 
+@app.get("/wallet/{userid}", status_code=status.HTTP_200_OK, tags=["payments"])
+async def get_user_payment(    #call on event completion
+        token: Annotated[str, Depends(oauth2_scheme)],
+        userid: int,
+        db: Session = Depends(get_db)):
+
+    token_user = get_current_user(db, User, token)
+    if token_user.id != userid:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="使用者無此權限")
+
+    #check user_id
+    user = db.query(User).filter_by(id=userid).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此使用者")
+
+    res = {"carpool_money": user.carpool_money}
+    return res
+
 @app.post("/linepay-request", status_code=status.HTTP_200_OK, tags=["linepay"])
 async def linepay_request_payment(
     token: Annotated[str, Depends(oauth2_scheme)], 
