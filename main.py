@@ -8,8 +8,8 @@ from fastapi.testclient import TestClient
 from fastapi.responses import JSONResponse
 import bcrypt
 import model
-from model import User, Event, Payment, Notification
-from schema import UserCreate, CreateEventBase, UserId, EventJoin, EventId, FindLocationForm, UserView, UserLicense, EventIdAndUserId, LinePayPayload
+from model import User, Event, Payment, Notification, Communication
+from schema import UserCreate, CreateEventBase, UserId, EventJoin, EventId, FindLocationForm, UserView, UserLicense, EventIdAndUserId, LinePayPayload, messageForm
 from database import SessionLocal, engine
 import uvicorn
 from sqlalchemy.orm.session import Session
@@ -232,7 +232,31 @@ async def dismiss_the_carpool(token: Annotated[str, Depends(oauth2_scheme)], eve
         
         if response.status_code != 200:
             raise HTTPException(status_code=response.status_code, detail=response.text)
-        
+
+
+    user_ids = event.joiner.split(',')[1:-1]
+    for temp_user_id in user_ids:
+        addNotification = Notification(
+            user_id = temp_user_id,
+            type = "dismiss",
+            time = datetime.now(),
+            event_id = event.id,
+            content = "Event已解散",
+        )
+        db.add(addNotification)
+        db.commit()
+        response = beams_client.publish_to_users(
+            user_ids=[str(temp_user_id)],   #list of published userid
+            publish_body={
+                'web': {
+                'notification': {
+                    'title': 'Test_title',
+                    'body': 'Test_body',
+                },
+                },
+            },
+        )
+
     return {"result" : "success"}
 
 
@@ -282,10 +306,10 @@ async def end_the_carpool(token: Annotated[str, Depends(oauth2_scheme)], eventID
         for i in range(len(joiner_list)):
             notification = Notification(
                 user_id=joiner_list[i],
-                type="reward" if i is 0 else "payment",
+                type="reward" if i == 0 else "payment",
                 time=datetime.now(),
                 event_id=event.id,
-                content=reward_content if i is 0 else payment_content,
+                content=reward_content if i == 0 else payment_content,
             )
             db.add(notification)
             db.commit()
@@ -811,6 +835,47 @@ def send_notification(
     return 1
     # return {"reward": reward_response['publishId'], "payment": payment_response['publishId']}
     
+
+@app.post("save-message", status_code=status.HTTP_200_OK, tags=["communication"])
+def save_message_to_db_and_notification(messageForm : messageForm, db:Session = Depends(get_db)):
+    event_id, sender_id, time, content = messageForm.event_id, messageForm.sender_id, messageForm.time, messageForm.content
+    event = db.query(Event).filter_by(id = event_id).first()
+    if not event:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此Event")
+    
+    addMessage = Communication(
+            event_id = event_id,
+            sender_id = sender_id,
+            time = time,
+            content = content,
+    )
+    db.add(addMessage)
+    db.commit()
+
+    user_ids = event.joiner.split(',')[1:-1]
+    for temp_user_id in user_ids:
+        if int(temp_user_id) != sender_id:
+            addNotification = Notification(
+                user_id = temp_user_id,
+                type = "communication",
+                time = time,
+                event_id = event_id,
+                content = "有新訊息",
+            )
+            db.add(addNotification)
+            db.commit()
+            response = beams_client.publish_to_users(
+                user_ids=[str(temp_user_id)],   #list of published userid
+                publish_body={
+                    'web': {
+                    'notification': {
+                        'title': 'Test_title',
+                        'body': 'Test_body',
+                    },
+                    },
+                },
+            )
+
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0",port=8080, reload=True)
     

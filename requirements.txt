@@ -12,3 +12,6 @@ requests
 python-multipart
 sqlalchemy
 httpx
+pusher_push_notifications
+mysqlclient
+mysql-connector-python

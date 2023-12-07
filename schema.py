@@ -60,3 +60,10 @@ class LinePayPayload(BaseModel):
     userid: int
     eventid: int
     payable: int
+
+
+class messageForm(BaseModel):
+    event_id : int
+    sender_id : int
+    time : datetime
+    content : str
