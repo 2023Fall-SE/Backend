@@ -34,12 +34,15 @@ def create_payment(event: Event, db: Session = Depends(get_db)):
 
 #calculate payable by the user_id
 def calculate_payable(userid: int, event: Event, joiner_list: list, db: Session = Depends(get_db)):
-
     joiner_loc = event.joiner_to_location.split(",") #['1-3', '2-3']
     joiner_loc = joiner_loc[1:-1]
     joiner_start_end_loc = [loc.split("-") for loc in joiner_loc]  #[['1', '3'], ['2', '3']]
-    total_num_loc = 0
 
+    # No need to calculate payment under this condition 
+    if len(joiner_list) == 1 and event.is_self_drive:
+        return event.accounts_payable
+    
+    total_num_loc = 0
     for i in range(1 if event.is_self_drive else 0, len(joiner_start_end_loc)):
         start_loc, end_loc = int(joiner_start_end_loc[i][0]), int(joiner_start_end_loc[i][1])
 

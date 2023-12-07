@@ -285,22 +285,8 @@ async def end_the_carpool(token: Annotated[str, Depends(oauth2_scheme)], eventID
         if not oncreate:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Payment創建失敗")
         
-        payment_content = {
-            'web': {
-            'notification': {
-                'title': '共乘App有新訊息',
-                'body': f'共乘ID{event.id}之發起者已結束共乘，請至結束共乘頁面付款',
-            },
-            },
-        },
-        reward_content = {
-            'web': {
-            'notification': {
-                'title': '共乘App有新訊息',
-                'body': f'共乘ID{event.id}之發起者已結束共乘，您已獲得獎勵(50代幣)，請至用戶儲值頁面確認',
-            },
-            },
-        },
+        payment_body = f'共乘ID{event.id}之發起者已結束共乘，請至結束共乘頁面付款'
+        reward_body = f'共乘ID{event.id}之發起者已結束共乘，您已獲得獎勵(50代幣)，請至用戶儲值頁面確認'
         
         joiner_list = event.joiner.strip(',').split(',')
         for i in range(len(joiner_list)):
@@ -309,7 +295,7 @@ async def end_the_carpool(token: Annotated[str, Depends(oauth2_scheme)], eventID
                 type="reward" if i == 0 else "payment",
                 time=datetime.now(),
                 event_id=event.id,
-                content=reward_content if i == 0 else payment_content,
+                content=reward_body if i == 0 else payment_body,
             )
             db.add(notification)
             db.commit()
@@ -818,40 +804,56 @@ async def beams_auth(
     return JSONResponse(content=beams_token)
 
 
-@app.get("/pusher/send-notification/{userid}", status_code=status.HTTP_200_OK, tags=["notification"])
+@app.get("/pusher/send-notification", status_code=status.HTTP_200_OK, tags=["notification"])
 def send_notification(
-    userid: int,   #for testing
-    # eventid: int,   #should be tested with endevent
+    # userid: int,   #for testing
+    eventid: int,   #should be tested with endevent
     db: Session = Depends(get_db)):
     
-    # payment_notify = db.query(Notification).filter_by(event_id=eventid, type="payment").all()
-    # reward_notify = db.query(Notification).filter_by(event_id=eventid, type="reward").first()
-   
-    # reward_response = beams_client.publish_to_users(
-    #     user_ids=[str(reward_notify.user_id)],   #list of published userid
-    #     publish_body=reward_notify.content
-    # )
-    
-    # payment_response = beams_client.publish_to_users(
-    #     user_ids=[str(payment_notify[row].user_id) for row in payment_notify],   #list of published userid
-    #     publish_body=payment_notify[0].content
-    # )
-    
-    #for testing
-    response = beams_client.publish_to_users(
-        user_ids=[str(userid)],   #list of published userid
-        publish_body={
-            'web': {
-            'notification': {
-                'title': 'Test_title',
-                'body': 'Test_body',
-            },
-            },
+    payment_notify = db.query(Notification).filter_by(event_id=eventid, type="payment").all()
+    reward_notify = db.query(Notification).filter_by(event_id=eventid, type="reward").first()
+
+    payment_content = {
+        'web': {
+        'notification': {
+            'title': '共乘App有新訊息',
+            'body': payment_notify[0].content,
         },
+        },
+    },
+    reward_content = {
+        'web': {
+        'notification': {
+            'title': '共乘App有新訊息',
+            'body': reward_notify.content,
+        },
+        },
+    },
+   
+    reward_response = beams_client.publish_to_users(
+        user_ids=[str(reward_notify.user_id)],   #list of published userid
+        publish_body=reward_content
     )
     
-    return 1
-    # return {"reward": reward_response['publishId'], "payment": payment_response['publishId']}
+    payment_response = beams_client.publish_to_users(
+        user_ids=[str(payment_notify[row].user_id) for row in payment_notify],   #list of published userid
+        publish_body=payment_content
+    )
+    
+    # #for testing
+    # response = beams_client.publish_to_users(
+    #     user_ids=[str(userid)],   #list of published userid
+    #     publish_body={
+    #         'web': {
+    #         'notification': {
+    #             'title': 'Test_title',
+    #             'body': 'Test_body',
+    #         },
+    #         },
+    #     },
+    # )
+    
+    return {"reward": reward_response['publishId'], "payment": payment_response['publishId']}
     
 
 @app.post("save-message", status_code=status.HTTP_200_OK, tags=["communication"])

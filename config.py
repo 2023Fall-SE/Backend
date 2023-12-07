@@ -10,8 +10,8 @@ class Config(object):
     DB_PATH = os.path.abspath(os.getcwd()) + "/database/carpool_test.db"
     DB_PWD = os.getenv("MYSQL_PASSWORD")
     DB_IP = os.getenv("MYSQL_IP")
-    # SQLALCHEMY_DATABASE_URL = "sqlite:///" + DB_PATH
-    SQLALCHEMY_DATABASE_URL = f'mysql://root:{DB_PWD}@{DB_IP}:3306/carpool-service-db'
+    SQLALCHEMY_DATABASE_URL = "sqlite:///" + DB_PATH
+    # SQLALCHEMY_DATABASE_URL = f'mysql://root:{DB_PWD}@{DB_IP}:3306/carpool-service-db'
     SECRET_KEY = "key_testing"
 
     JWT_SECRET_KEY = "jwt_key_testing"
