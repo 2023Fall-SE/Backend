@@ -11,7 +11,7 @@ class Config(object):
     SQLALCHEMY_DATABASE_URL = "sqlite:///" + DB_PATH
     SECRET_KEY = "key_testing"
     
-    DB = "mysql"
+    DB = "sqlite"
     DB_PASSWORD = os.getenv("MYSQL_PASSWORD")
     DB_IP = os.getenv("MYSQL_IP")
     DB_NAME = os.getenv("MYSQL_NAME")
