@@ -282,10 +282,10 @@ async def end_the_carpool(token: Annotated[str, Depends(oauth2_scheme)], eventID
         for i in range(len(joiner_list)):
             notification = Notification(
                 user_id=joiner_list[i],
-                type="reward" if i is 0 else "payment",
+                type="reward" if i == 0 else "payment",
                 time=datetime.now(),
                 event_id=event.id,
-                content=reward_content if i is 0 else payment_content,
+                content=reward_content if i == 0 else payment_content,
             )
             db.add(notification)
             db.commit()
