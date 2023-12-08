@@ -37,7 +37,7 @@ jobs:
           service: ${{ env.SERVICE }}
           region: ${{ env.REGION }}
           image: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/carpool-service-test/${{ env.SERVICE }}:01
-          env_vars: DB_PASSWORD=${{ secrets.DB_PASSWORD }}, DB_IP = ${{ secrets.DB_IP }}, DB_NAME = "carpool-service"
+          env_vars: DB_PASSWORD=${{ secrets.DB_PASSWORD }}, DB_IP=${{ secrets.DB_IP }}, DB_NAME="carpool-service"
 
       - name: Use output
         run: curl "${{ steps.deploy.outputs.url }}"
