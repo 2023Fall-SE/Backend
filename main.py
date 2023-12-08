@@ -289,22 +289,25 @@ async def end_the_carpool(token: Annotated[str, Depends(oauth2_scheme)], eventID
         reward_body = f'共乘ID{event.id}之發起者已結束共乘，您已獲得獎勵(50代幣)，請至用戶儲值頁面確認'
         
         joiner_list = event.joiner.strip(',').split(',')
-        for i in range(len(joiner_list)):
-            notification = Notification(
-                user_id=joiner_list[i],
-                type="reward" if i == 0 else "payment",
-                time=datetime.now(),
-                event_id=event.id,
-                content=reward_body if i == 0 else payment_body,
-            )
-            db.add(notification)
-            db.commit()
         
-        sendnodapi_url = f"{Config.BACKEND_URL}/pusher/send-notification/?eventid={event.id}"
-        async with AsyncClient() as client:
-            response = await client.get(url=sendnodapi_url)
-        if response.status_code != 200:
-            raise HTTPException(status_code=response.status_code, detail=response.text)
+        #no reward with only the initiator
+        if len(joiner_list) > 1:
+            for i in range(len(joiner_list)):
+                notification = Notification(
+                    user_id=joiner_list[i],
+                    type="reward" if i == 0 else "payment",
+                    time=datetime.now(),
+                    event_id=event.id,
+                    content=reward_body if i == 0 else payment_body,
+                )
+                db.add(notification)
+                db.commit()
+            
+            sendnodapi_url = f"{Config.BACKEND_URL}/pusher/send-notification/{event.id}"
+            async with AsyncClient() as client:
+                response = await client.get(url=sendnodapi_url)
+            if response.status_code != 200:
+                raise HTTPException(status_code=response.status_code, detail=response.text)
         
     return {"result" : "success"}
 
@@ -804,7 +807,7 @@ async def beams_auth(
     return JSONResponse(content=beams_token)
 
 
-@app.get("/pusher/send-notification", status_code=status.HTTP_200_OK, tags=["notification"])
+@app.get("/pusher/send-notification/{eventid}", status_code=status.HTTP_200_OK, tags=["notification"])
 def send_notification(
     # userid: int,   #for testing
     eventid: int,   #should be tested with endevent
@@ -820,7 +823,7 @@ def send_notification(
             'body': payment_notify[0].content,
         },
         },
-    },
+    }
     reward_content = {
         'web': {
         'notification': {
@@ -828,7 +831,12 @@ def send_notification(
             'body': reward_notify.content,
         },
         },
-    },
+    }
+    
+    # print(type(reward_notify.content))
+    # print(reward_content)
+    
+    print("------------")
    
     reward_response = beams_client.publish_to_users(
         user_ids=[str(reward_notify.user_id)],   #list of published userid
@@ -836,9 +844,11 @@ def send_notification(
     )
     
     payment_response = beams_client.publish_to_users(
-        user_ids=[str(payment_notify[row].user_id) for row in payment_notify],   #list of published userid
+        user_ids=[str(payment_notify[idx].user_id) for idx in range(len(payment_notify))],   #list of published userid
         publish_body=payment_content
     )
+    
+    print("------------")
     
     # #for testing
     # response = beams_client.publish_to_users(

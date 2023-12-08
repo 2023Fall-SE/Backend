@@ -9,7 +9,6 @@ beams_client = PushNotifications(
     secret_key=Config.PUSHER_SECRET,
 )
 
-
 async def send_push_notification(instance_id: str, secret_key: str, payload: Dict):
     url = f"https://{instance_id}.pushnotifications.pusher.com/publish_api/v1/instances/{instance_id}/publishes/interests"
 

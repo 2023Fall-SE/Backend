@@ -38,8 +38,8 @@ def calculate_payable(userid: int, event: Event, joiner_list: list, db: Session 
     joiner_loc = joiner_loc[1:-1]
     joiner_start_end_loc = [loc.split("-") for loc in joiner_loc]  #[['1', '3'], ['2', '3']]
 
-    # No need to calculate payment under this condition 
-    if len(joiner_list) == 1 and event.is_self_drive:
+    # No need to calculate payment with only one joiner
+    if len(joiner_list) == 1:
         return event.accounts_payable
     
     total_num_loc = 0
