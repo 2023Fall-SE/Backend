@@ -285,13 +285,13 @@ async def end_the_carpool(token: Annotated[str, Depends(oauth2_scheme)], eventID
         if not oncreate:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Payment創建失敗")
         
-        payment_body = f'共乘ID{event.id}之發起者已結束共乘，請至結束共乘頁面付款'
-        reward_body = f'共乘ID{event.id}之發起者已結束共乘，您已獲得獎勵(50代幣)，請至用戶儲值頁面確認'
-        
         joiner_list = event.joiner.strip(',').split(',')
         
         #no reward with only the initiator
         if len(joiner_list) > 1:
+            payment_body = f'共乘ID{event.id}之發起者已結束共乘，請至結束共乘頁面付款'
+            reward_body = f'共乘ID{event.id}之發起者已結束共乘，您已獲得獎勵(50代幣)，請至用戶儲值頁面確認'
+            
             for i in range(len(joiner_list)):
                 notification = Notification(
                     user_id=joiner_list[i],
@@ -604,8 +604,6 @@ async def handle_payable(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此付款欄位")
     if payment.isCompleted:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="此用戶已完成付款")
-    if payment.order_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="此用戶尚有待確認付款")
         
 
     db.query(Payment).filter_by(user_id=user.id, event_id=event.id).update(dict(
@@ -736,7 +734,7 @@ async def linepay_confirm_payment(
     
     payment = db.query(Payment).filter_by(user_id=userid, event_id=eventid).first()
     if payment.isCompleted:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="此用戶已完成付款")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="此搭乘已完成付款")
 
     linepay_confirm = create_confirm(user, event, db)
     
@@ -809,8 +807,7 @@ async def beams_auth(
 
 @app.get("/pusher/send-notification/{eventid}", status_code=status.HTTP_200_OK, tags=["notification"])
 def send_notification(
-    # userid: int,   #for testing
-    eventid: int,   #should be tested with endevent
+    eventid: int, 
     db: Session = Depends(get_db)):
     
     payment_notify = db.query(Notification).filter_by(event_id=eventid, type="payment").all()
@@ -832,23 +829,14 @@ def send_notification(
         },
         },
     }
-    
-    # print(type(reward_notify.content))
-    # print(reward_content)
-    
-    print("------------")
-   
     reward_response = beams_client.publish_to_users(
         user_ids=[str(reward_notify.user_id)],   #list of published userid
         publish_body=reward_content
     )
-    
     payment_response = beams_client.publish_to_users(
         user_ids=[str(payment_notify[idx].user_id) for idx in range(len(payment_notify))],   #list of published userid
         publish_body=payment_content
     )
-    
-    print("------------")
     
     # #for testing
     # response = beams_client.publish_to_users(
@@ -864,7 +852,33 @@ def send_notification(
     # )
     
     return {"reward": reward_response['publishId'], "payment": payment_response['publishId']}
+
+@app.get("/get-notification", status_code=status.HTTP_200_OK, tags=["notification"])
+def get_notification(
+    token: Annotated[str, Depends(oauth2_scheme)], 
+    userid: int,
+    db: Session = Depends(get_db)):
     
+    #check user_id
+    token_user = get_current_user(db, User, token)
+    if token_user.id != userid:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="使用者無此權限")
+
+    user = db.query(User).filter_by(id=userid).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此使用者")
+    
+    notification = db.query(Notification).filter_by(user_id=userid).all()
+    notification_ret = {}
+    for i in range(len(notification)):
+        new_row = {}
+        new_row["eventid"] = notification[i].event_id
+        new_row["type"] = notification[i].type
+        new_row["time"] = notification[i].time
+        new_row["content"] = notification[i].content
+        notification_ret[str(i)] = new_row
+
+    return notification_ret
 
 @app.post("save-message", status_code=status.HTTP_200_OK, tags=["communication"])
 def save_message_to_db_and_notification(messageForm : messageForm, db:Session = Depends(get_db)):

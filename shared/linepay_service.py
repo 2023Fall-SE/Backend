@@ -54,7 +54,7 @@ def create_order(user: User, event: Event, payable: int, db: Session = Depends(g
 
     #check repeated order
     if payment.isCompleted:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="此訂單先前已完成付款")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="此搭乘已完成付款")
     order_id = generate_random_orderid() #unique order id
     
     order = {
