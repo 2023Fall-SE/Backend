@@ -108,7 +108,7 @@ class Communication(Base):
     __tablename__ = "communication"
     id = Column(Integer, primary_key=True)
     event_id = Column(Integer, ForeignKey('event.id'), nullable=False)
-    sender = Column(String(100),  ForeignKey('user.id'), nullable=False)
+    sender = Column(Integer,  ForeignKey('user.id'), nullable=False)
     time = Column(DateTime, default=datetime.now())
     content = Column(String(200), nullable=False)
 
