@@ -77,7 +77,7 @@ def create_order(user: User, event: Event, payable: int, db: Session = Depends(g
             }
         ],
         "redirectUrls" : {
-            "confirmUrl" : f"https://localhost:3000/confirm?event_id={event.id}",
+            "confirmUrl" : f"http://localhost:3000/confirm?event_id={event.id}",
             "cancelUrl" : "https://4ff7-59-115-198-214.ngrok-free.app/loginstate/ended"
         }
     }
