@@ -18,7 +18,7 @@ class Config(object):
     DB_NAME = os.getenv("DB_NAME")
     PROJECT_INSTANCE = os.getenv("PROJECT_INSTANCE")
     # 如果要使用 sqlite 請註解此行
-    SQLALCHEMY_DATABASE_URL = f"mysql+pymysql://root:{DB_PASSWORD}@localhost:3306/{DB_NAME}"
+    SQLALCHEMY_DATABASE_URL = f"mysql+pymysql://root:{DB_PASSWORD}@{DB_IP}:3306/{DB_NAME}"
     # -----------------------------------------------------------------
 
     JWT_SECRET_KEY = "jwt_key_testing"
