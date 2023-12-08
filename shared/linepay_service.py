@@ -77,7 +77,7 @@ def create_order(user: User, event: Event, payable: int, db: Session = Depends(g
             }
         ],
         "redirectUrls" : {
-            "confirmUrl" : "https://chat.openai.com/c/103bd661-430a-4e12-9c32-0519c750115a",
+            "confirmUrl" : f"https://localhost:3000/confirm?event_id={event.id}",
             "cancelUrl" : "https://4ff7-59-115-198-214.ngrok-free.app/loginstate/ended"
         }
     }
