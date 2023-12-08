@@ -13,12 +13,12 @@ class Config(object):
     
     # ----------------MySQL & Cloud SQL Config-------------------------
     DB = "mysql"  # 這行不用改 暫時沒用到
-    DB_PASSWORD = os.getenv("MYSQL_PASSWORD")
-    DB_IP = os.getenv("MYSQL_IP")
-    DB_NAME = os.getenv("MYSQL_NAME")
+    DB_PASSWORD = os.getenv("DB_PASSWORD")
+    DB_IP = os.getenv("DB_IP")
+    DB_NAME = os.getenv("DB_NAME")
     PROJECT_INSTANCE = os.getenv("PROJECT_INSTANCE")
     # 如果要使用 sqlite 請註解此行
-    # SQLALCHEMY_DATABASE_URL = f"mysql+pymysql://root:{DB_PASSWORD}@{DB_IP}:3306/{DB_NAME}"
+    SQLALCHEMY_DATABASE_URL = f"mysql+pymysql://root:{DB_PASSWORD}@{DB_IP}:3306/{DB_NAME}"
     # -----------------------------------------------------------------
 
     JWT_SECRET_KEY = "jwt_key_testing"
