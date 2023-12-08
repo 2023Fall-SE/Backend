@@ -49,7 +49,7 @@ class UserView(BaseModel):
     password: Optional[str] = Field(None, min_length=8, pattern=r"^[A-Za-z0-9@$!%*?&_.]+$")
     display_name: Optional[str] = Field(None, min_length=3, max_length=20)
     phone: Optional[str] = Field(None, min_length=10, max_length=10, pattern=r"[0-9]")
-    mail: Optional[str] = Field(None, max_length=100, pattern=r"^[a-zA-Z0-9]+@[a-zA-Z0-9]+\.[a-zA-Z]{2,3}$")
+    mail: Optional[str] = Field(None, max_length=100, pattern=r"^[a-zA-Z0-9]+@[a-zA-Z0-9]+\.[a-zA-Z]{2,3}$",examples=["abcde1234@gmail.com"])
 
 
 class UserLicense(BaseModel):

@@ -11,15 +11,19 @@ class Config(object):
     SQLALCHEMY_DATABASE_URL = "sqlite:///" + DB_PATH
     SECRET_KEY = "key_testing"
     
-    DB = "sqlite"
+    # ----------------MySQL & Cloud SQL Config-------------------------
+    DB = "mysql"  # 這行不用改 暫時沒用到
     DB_PASSWORD = os.getenv("MYSQL_PASSWORD")
     DB_IP = os.getenv("MYSQL_IP")
     DB_NAME = os.getenv("MYSQL_NAME")
     PROJECT_INSTANCE = os.getenv("PROJECT_INSTANCE")
+    # 如果要使用 sqlite 請註解此行
+    # SQLALCHEMY_DATABASE_URL = f"mysql+pymysql://root:{DB_PASSWORD}@{DB_IP}:3306/{DB_NAME}"
+    # -----------------------------------------------------------------
 
     JWT_SECRET_KEY = "jwt_key_testing"
     JWT_ALGORITHM = "HS256"
-    EXPIRE_SECOND = 60 * 60 *6
+    EXPIRE_SECOND = 60 * 60 * 6
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(seconds=EXPIRE_SECOND)
 
     LICENSE_UPLOAD_PATH = os.path.abspath(os.getcwd()) + "/license/"

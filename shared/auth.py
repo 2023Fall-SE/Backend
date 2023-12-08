@@ -22,7 +22,7 @@ def authenticate_user(db, user_orm, username: str, password: str):
     user = db.query(user_orm).filter_by(username=username).first()
     if not user:
         return False
-    if not verify_password(password.encode('utf-8'), user.password):
+    if not verify_password(password.encode('utf-8'), user.password.encode('utf-8')):
         return False
     return user
 
