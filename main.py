@@ -37,10 +37,7 @@ if not os.path.isdir(Config.LICENSE_UPLOAD_PATH):
 
 model.Base.metadata.create_all(bind=engine)
 app = FastAPI()
-origins = [
-    "http://localhost",
-    "http://localhost:3000",
-]
+origins = ["*"]
 app.add_middleware(CORSMiddleware,
                     allow_origins=origins,
                     allow_credentials=True,
