@@ -300,9 +300,9 @@ async def end_the_carpool(token: Annotated[str, Depends(oauth2_scheme)], eventID
             db.add(notification)
             db.commit()
         
-        sendnodapi_url = f"{Config.BACKEND_URL}/pusher/send-notification"
+        sendnodapi_url = f"{Config.BACKEND_URL}/pusher/send-notification/?eventid={event.id}"
         async with AsyncClient() as client:
-            response = await client.post(url=sendnodapi_url, json={"eventid": event.id})
+            response = await client.get(url=sendnodapi_url)
         if response.status_code != 200:
             raise HTTPException(status_code=response.status_code, detail=response.text)
         
