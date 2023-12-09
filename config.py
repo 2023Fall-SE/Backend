@@ -18,9 +18,9 @@ class Config(object):
     DB_NAME = os.getenv("DB_NAME")
     PROJECT_INSTANCE = os.getenv("PROJECT_INSTANCE")
     # 如果要使用 sqlite 請註解下行
-    SQLALCHEMY_DATABASE_URL = f"mysql+pymysql://root:{DB_PASSWORD}@{DB_IP}:3306/{DB_NAME}"
+    #SQLALCHEMY_DATABASE_URL = f"mysql+pymysql://root:{DB_PASSWORD}@{DB_IP}:3306/{DB_NAME}"
     # 改變使用資料庫時請修改下面為 "mysql" or "sqlite"
-    DB = "mysql"
+    DB = "sqlite"
 
     # -----------------------------------------------------------------
 
