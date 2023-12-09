@@ -37,7 +37,10 @@ if not os.path.isdir(Config.LICENSE_UPLOAD_PATH):
 
 model.Base.metadata.create_all(bind=engine)
 app = FastAPI()
-origins = ["http://localhost:8080", "*"]
+origins = ["http://localhost",
+        "http://localhost:8080",
+        "http://localhost:3000",
+        "https://carpool-service-ui-cvklf2agbq-de.a.run.app"]
 app.add_middleware(CORSMiddleware,
                     allow_origins=origins,
                     allow_credentials=True,
