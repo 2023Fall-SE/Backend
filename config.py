@@ -10,15 +10,18 @@ class Config(object):
     DB_PATH = os.path.abspath(os.getcwd()) + "/database/carpool_test.db"
     SQLALCHEMY_DATABASE_URL = "sqlite:///" + DB_PATH
     SECRET_KEY = "key_testing"
-    
+
     # ----------------MySQL & Cloud SQL Config-------------------------
-    DB = "mysql"  # 這行不用改 暫時沒用到
+
     DB_PASSWORD = os.getenv("DB_PASSWORD")
     DB_IP = os.getenv("DB_IP")
     DB_NAME = os.getenv("DB_NAME")
     PROJECT_INSTANCE = os.getenv("PROJECT_INSTANCE")
-    # 如果要使用 sqlite 請註解此行
+    # 如果要使用 sqlite 請註解下行
     # SQLALCHEMY_DATABASE_URL = f"mysql+pymysql://root:{DB_PASSWORD}@{DB_IP}:3306/{DB_NAME}"
+    # 改變使用資料庫時請修改下面為 "mysql" or "sqlite"
+    DB = "sqlite"
+
     # -----------------------------------------------------------------
 
     JWT_SECRET_KEY = "jwt_key_testing"
