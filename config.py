@@ -4,7 +4,6 @@ from datetime import timedelta
 
 load_dotenv()
 class Config(object):
-    BACKEND_URL="http://127.0.0.1:8080"
     
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     DB_PATH = os.path.abspath(os.getcwd()) + "/database/carpool_test.db"
@@ -21,6 +20,8 @@ class Config(object):
     SQLALCHEMY_DATABASE_URL = f"mysql+pymysql://root:{DB_PASSWORD}@{DB_IP}:3306/{DB_NAME}"
     # 改變使用資料庫時請修改下面為 "mysql" or "sqlite"
     DB = "mysql"
+    # 推到 main 時請將下面改為     BACKEND_URL="http://127.0.0.1:8080"
+    BACKEND_URL = "https://carpool-service-test-cvklf2agbq-de.a.run.app"
 
     # -----------------------------------------------------------------
 
