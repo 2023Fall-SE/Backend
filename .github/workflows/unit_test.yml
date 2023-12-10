@@ -32,14 +32,14 @@ jobs:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
           create_credentials_file: true
 
+      - id: unittest
+        run: |
+          docker build -t unit_test:01 .
+          docker run -p 8080:8080 unit_test:01
+          pytest unit_test.py
+
       - name: Build Docker Image
         run: |
           docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/carpool-service-backend-unitest/${{ env.SERVICE }}:01 .
           gcloud auth configure-docker asia-east1-docker.pkg.dev
           docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/carpool-service-backend-unitest/${{ env.SERVICE }}:01
-
-      - id: unittest
-        run:
-          docker run -p 8080:8080 ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/carpool-service-test/${{ env.SERVICE }}:01 
-          pytest unit_test.py
-
