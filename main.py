@@ -792,18 +792,12 @@ async def linepay_rollback_payment(
 #尚未測試: 1. endevent後存db+發消息 2. 多個users同時收通知 3. beams_auth用token驗證(部屬db問題)
 @app.get("/pusher/beams-auth", status_code=status.HTTP_200_OK, tags=["notification"])
 async def beams_auth(
-    userid: int, 
-    # token: Annotated[str, Depends(oauth2_scheme)], 
+    username: str, 
     db: Session = Depends(get_db)):
-    
-    # token_user = get_current_user(db, User, token)
-    # if token_user.id != userid:
-    #     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="使用者無此權限")
-    
-    beams_token = beams_client.generate_token(str(userid))
+
+    beams_token = beams_client.generate_token(username)
     # print(beams_token)
     return JSONResponse(content=beams_token)
-
 
 @app.get("/pusher/send-notification/{eventid}", status_code=status.HTTP_200_OK, tags=["notification"])
 def send_notification(
@@ -811,7 +805,13 @@ def send_notification(
     db: Session = Depends(get_db)):
     
     payment_notify = db.query(Notification).filter_by(event_id=eventid, type="payment").all()
+    payment_userid = [int(payment_notify[idx].user_id) for idx in range(len(payment_notify))]
+    payment_usermame = db.query(User.username).filter(User.id.in_(payment_userid)).all()
+    payment_usermame = [row[0] for row in payment_usermame]
+
     reward_notify = db.query(Notification).filter_by(event_id=eventid, type="reward").first()
+    reward_usermame = db.query(User.username).filter_by(id=reward_notify.user_id).first()
+    reward_usermame = [reward_usermame[0]]
 
     payment_content = {
         'web': {
@@ -830,17 +830,17 @@ def send_notification(
         },
     }
     reward_response = beams_client.publish_to_users(
-        user_ids=[str(reward_notify.user_id)],   #list of published userid
+        user_ids=reward_usermame,   #list of published username
         publish_body=reward_content
     )
     payment_response = beams_client.publish_to_users(
-        user_ids=[str(payment_notify[idx].user_id) for idx in range(len(payment_notify))],   #list of published userid
+        user_ids=payment_usermame,   #list of published username
         publish_body=payment_content
     )
     
     # #for testing
     # response = beams_client.publish_to_users(
-    #     user_ids=[str(userid)],   #list of published userid
+    #     user_ids=["test2"],   #list of published userid
     #     publish_body={
     #         'web': {
     #         'notification': {
@@ -851,7 +851,8 @@ def send_notification(
     #     },
     # )
     
-    return {"reward": reward_response['publishId'], "payment": payment_response['publishId']}
+    # return {"reward": reward_response['publishId'], "payment": payment_response['publishId']}
+    return 1
 
 @app.get("/get-notification", status_code=status.HTTP_200_OK, tags=["notification"])
 def get_notification(
