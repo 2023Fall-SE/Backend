@@ -43,8 +43,3 @@ jobs:
           docker run -p 8080:8080 ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/carpool-service-test/${{ env.SERVICE }}:01 
           pytest unit_test.py
 
-      - name: Use output
-        run: curl "${{ unittest.outputs.url }}"
-
-      - name: Info
-        run: gcloud info
