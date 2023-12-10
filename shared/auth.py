@@ -14,6 +14,7 @@ class Token(BaseModel):
     access_token: str
     token_type: str
     user_id: int
+    display_name: str
 
 def verify_password(plain_password, hashed_password):
     return bcrypt.checkpw(plain_password, hashed_password)

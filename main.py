@@ -71,7 +71,7 @@ def user_login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: S
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="帳號或密碼錯誤")
     else:
         user_token = create_access_token({"user_id": user.id})
-        res = Token(access_token=user_token, token_type="bearer", user_id=user.id)
+        res = Token(access_token=user_token, token_type="bearer", user_id=user.id, user_display_name=user.display_name)
         return res
 
 @app.post("/user", status_code=status.HTTP_201_CREATED, tags=["users"])
