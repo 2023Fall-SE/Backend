@@ -25,13 +25,24 @@ jobs:
         run:
           pip3 install pytest
 
-      - id: unittest
-        run: |
+      - name: build test docker
+        run:
           docker build -t unit_test:01 .
+
+      - name: run test docker
+        run:
           docker run -p 8080:8080 unit_test:01
+
+      - name: sleep
+        run:
           sleep 10
+
+      - name: pytest
+        run:
           pytest unit_test.py
-          sleep 10
+
+      - name: test docker stop
+        run:
           docker stop $(docker ps -a -q)
 
       - uses: google-github-actions/auth@v1
