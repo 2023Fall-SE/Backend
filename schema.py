@@ -8,11 +8,9 @@ class UserBase(BaseModel):
     password: str = Field(min_length=8, pattern=r"^[A-Za-z0-9@$!%*?&_.]+$")
     display_name: str = Field(min_length=3, max_length=20)
 
-
-
 class UserCreate(UserBase):
-    phone: Optional[str] = Field(min_length=10, max_length=10, pattern=r"[0-9]", default=None)
-    mail: Optional[str] = Field(max_length=100, pattern=r"^[a-zA-Z0-9]+@[a-zA-Z0-9]+\.[a-zA-Z]{2,3}$", default=None, examples=["abcde1234@gmail.com"])
+    phone: Optional[str] = Field(None, max_length=10, pattern=r"^[0-9]*$")
+    mail: Optional[str] = Field(None, max_length=100, pattern=r"^(?:[a-zA-Z0-9]+@[a-zA-Z0-9]+\.[a-zA-Z]{2,3})?$",examples=["abcde1234@gmail.com"])
 
 class CreateEventBase(BaseModel):
     user_id: int
@@ -47,10 +45,9 @@ class FindLocationForm(BaseModel):
 class UserView(BaseModel):
     user_id: int
     password: Optional[str] = Field(None, min_length=8, pattern=r"^[A-Za-z0-9@$!%*?&_.]+$")
-    display_name: Optional[str] = Field(None, min_length=3, max_length=20)
-    phone: Optional[str] = Field(None, min_length=10, max_length=10, pattern=r"[0-9]")
-    mail: Optional[str] = Field(None, max_length=100, pattern=r"^[a-zA-Z0-9]+@[a-zA-Z0-9]+\.[a-zA-Z]{2,3}$",examples=["abcde1234@gmail.com"])
-
+    display_name: Optional[str] = Field(None, min_length=0, max_length=20)
+    phone: Optional[str] = Field(None, max_length=10, pattern=r"^[0-9]*$")
+    mail: Optional[str] = Field(None, max_length=100, pattern=r"^(?:[a-zA-Z0-9]+@[a-zA-Z0-9]+\.[a-zA-Z]{2,3})?$",examples=["abcde1234@gmail.com"])
 
 class UserLicense(BaseModel):
     name: str
