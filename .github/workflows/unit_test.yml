@@ -31,7 +31,7 @@ jobs:
 
       - name: run test docker
         run:
-          docker run -p 8080:8080 unit_test:01
+          docker run -d -p 8080:8080 unit_test:01
 
       - name: sleep
         run:
