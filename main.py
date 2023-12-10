@@ -215,51 +215,58 @@ async def dismiss_the_carpool(token: Annotated[str, Depends(oauth2_scheme)], eve
 
     if event.end_time != None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Event已結束")
+    
     db.query(Event).filter_by(id=eventID.event_id).update({'end_time':datetime.now()})
     db.query(Event).filter_by(id=eventID.event_id).update({'available_seats':0})
     event.status = "dismiss"
     db.commit()
     
-    #create payment and send reward notification to initiator on success
-    if event.end_time > event.start_time:
-        oncreate = create_payment(event, db) #create Payment instances for joiners and calculate payables respectively
-        if not oncreate:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Payment創建失敗")
+    # #create payment and send reward notification to initiator on success
+    # if event.end_time > event.start_time:
+    #     oncreate = create_payment(event, db) #create Payment instances for joiners and calculate payables respectively
+    #     if not oncreate:
+    #         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Payment創建失敗")
         
-        rewardapi_url = f"{Config.BACKEND_URL}/send-reward/{event.initiator}"
+    #     rewardapi_url = f"{Config.BACKEND_URL}/send-reward/{event.initiator}"
         
-        async with AsyncClient() as client:
-            response = await client.post(rewardapi_url)
+    #     async with AsyncClient() as client:
+    #         response = await client.post(rewardapi_url)
         
-        if response.status_code != 200:
-            raise HTTPException(status_code=response.status_code, detail=response.text)
-
+    #     if response.status_code != 200:
+    #         raise HTTPException(status_code=response.status_code, detail=response.text)
 
     user_ids = event.joiner.split(',')[1:-1]
+    user_ids_int = [int(id) for id in user_ids]
+    dismiss_usermame = db.query(User.username).filter(User.id.in_(user_ids_int)).all()
+    dismiss_usermame = [row[0] for row in dismiss_usermame]
+    dismiss_body = f"共乘ID{event.id}已解散"
+    
     for temp_user_id in user_ids:
         addNotification = Notification(
             user_id = temp_user_id,
             type = "dismiss",
             time = datetime.now(),
             event_id = event.id,
-            content = "Event已解散",
+            content = dismiss_body,
         )
         db.add(addNotification)
         db.commit()
-        response = beams_client.publish_to_users(
-            user_ids=[str(temp_user_id)],   #list of published userid
-            publish_body={
-                'web': {
-                'notification': {
-                    'title': 'Test_title',
-                    'body': 'Test_body',
-                },
-                },
-            },
-        )
-
+    
+    dismiss_content = {
+        'web': {
+        'notification': {
+            'title': '共乘App有新訊息',
+            'body': dismiss_body,
+        },
+        },
+    }
+    
+    dismiss_response = beams_client.publish_to_users(
+        user_ids=dismiss_usermame,   #list of published username
+        publish_body=dismiss_content
+    )
+    
     return {"result" : "success"}
-
 
 # (7) 結束此共乘
 @app.post("/end-the-carpool", status_code=status.HTTP_200_OK, tags=["events"])
@@ -311,7 +318,6 @@ async def end_the_carpool(token: Annotated[str, Depends(oauth2_scheme)], eventID
                 raise HTTPException(status_code=response.status_code, detail=response.text)
         
     return {"result" : "success"}
-
 
 # (7) 離開此共乘
 @app.post("/leave-the-carpool", status_code=status.HTTP_200_OK, tags=["events"])
@@ -416,7 +422,6 @@ def create_new_carpool(token: Annotated[str, Depends(oauth2_scheme)], eventForm:
     db.commit()
     # return success or fail
     return {"event_id" : addEvent.id}
-
              
 # User Page Info
 @app.put("/update-user-info", status_code=status.HTTP_200_OK, tags=["users"])
@@ -575,7 +580,6 @@ async def delete_license(
 
     return {"user_id": userid}
 
-
 # Payment
 #end event->get_user_payment->(when user clicks payment button)handle_payable->Line Pay...
 @app.post("/payable", status_code=status.HTTP_200_OK, tags=["payments"])
@@ -716,7 +720,6 @@ async def linepay_request_payment(
     
     return {"payment_url": payment_url}
 
-
 @app.post("/linepay-confirm", status_code=status.HTTP_200_OK, tags=["linepay"])
 async def linepay_confirm_payment(
     userid: int,
@@ -838,20 +841,7 @@ def send_notification(
         user_ids=payment_usermame,   #list of published username
         publish_body=payment_content
     )
-    
-    # #for testing
-    # response = beams_client.publish_to_users(
-    #     user_ids=["test2"],   #list of published userid
-    #     publish_body={
-    #         'web': {
-    #         'notification': {
-    #             'title': 'Test_title',
-    #             'body': 'Test_body',
-    #         },
-    #         },
-    #     },
-    # )
-    
+
     # return {"reward": reward_response['publishId'], "payment": payment_response['publishId']}
     return 1
 
