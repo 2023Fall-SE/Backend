@@ -29,7 +29,9 @@ jobs:
         run: |
           docker build -t unit_test:01 .
           docker run -p 8080:8080 unit_test:01
+          sleep 10
           pytest unit_test.py
+          sleep 10
           docker stop $(docker ps -a -q)
 
       - uses: google-github-actions/auth@v1
