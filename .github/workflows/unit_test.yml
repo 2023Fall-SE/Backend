@@ -23,7 +23,7 @@ jobs:
 
       - name: install pytest
         run:
-          pip3 install pytest
+          pip3 install -r requirements.txt 
 
       - name: build test docker
         run:
