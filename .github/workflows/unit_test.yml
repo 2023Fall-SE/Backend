@@ -11,7 +11,7 @@ env:
   PYTHON_VERSION: '3.9'
 
 jobs:
-  deploy:
+  testing:
     runs-on: ubuntu-latest
 
     steps:
@@ -25,18 +25,19 @@ jobs:
         run:
           pip3 install pytest
 
+      - id: unittest
+        run: |
+          docker build -t unit_test:01 .
+          docker run -p 8080:8080 unit_test:01
+          pytest unit_test.py
+          docker stop $(docker ps -a -q)
+
       - uses: google-github-actions/auth@v1
         id: auth
         with:
           project_id: ${{ env.PROJECT_ID }}
           credentials_json: ${{ secrets.GCP_SA_KEY }}
           create_credentials_file: true
-
-      - id: unittest
-        run: |
-          docker build -t unit_test:01 .
-          docker run -p 8080:8080 unit_test:01
-          pytest unit_test.py
 
       - name: Build Docker Image
         run: |
