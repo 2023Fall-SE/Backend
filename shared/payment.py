@@ -1,17 +1,17 @@
 from model import User, Event, Payment
 from fastapi import FastAPI, Depends, status, HTTPException
 from sqlalchemy.orm.session import Session
-from database import SessionLocal, engine
+# from database import SessionLocal, engine
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# def get_db():
+#     db = SessionLocal()
+#     try:
+#         yield db
+#     finally:
+#         db.close()
 
 #create Payment instances after Event Completion
-def create_payment(event: Event, db: Session = Depends(get_db)):
+def create_payment(event: Event, db: Session):
     #check event_id
     if not event:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無此共乘事件")
@@ -21,7 +21,7 @@ def create_payment(event: Event, db: Session = Depends(get_db)):
     for i in range(len(joiner_list)):
         payment = Payment(
             with_draw_or_top_up=0,
-            money=calculate_payable(joiner_list[i], event, joiner_list, db),
+            money=calculate_payable(joiner_list[i], event, joiner_list),
             event_id=event.id,
             isCompleted=False if i != 0 else True,  #initiator is auto. completed
             user_id=joiner_list[i],
@@ -33,7 +33,7 @@ def create_payment(event: Event, db: Session = Depends(get_db)):
     return 1
 
 #calculate payable by the user_id
-def calculate_payable(userid: int, event: Event, joiner_list: list, db: Session = Depends(get_db)):
+def calculate_payable(userid: int, event: Event, joiner_list: list):
     joiner_loc = event.joiner_to_location.split(",") #['1-3', '2-3']
     joiner_loc = joiner_loc[1:-1]
     joiner_start_end_loc = [loc.split("-") for loc in joiner_loc]  #[['1', '3'], ['2', '3']]
