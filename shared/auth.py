@@ -21,9 +21,9 @@ def verify_password(plain_password, hashed_password):
 
 def authenticate_user(db, user_orm, username: str, password: str):
     user = db.query(user_orm).filter_by(username=username).first()
-    userpasswd = user.password if Config.DB != "mysql" else user.password.encode('utf-8')
     if not user:
         return False
+    userpasswd = user.password if Config.DB != "mysql" else user.password.encode('utf-8')
     if not verify_password(password.encode('utf-8'), userpasswd):
         return False
     return user
