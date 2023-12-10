@@ -34,8 +34,10 @@ def create_payment(event: Event, db: Session):
 
 #calculate payable by the user_id
 def calculate_payable(userid: int, event: Event, joiner_list: list):
-    joiner_loc = event.joiner_to_location.split(",") #['1-3', '2-3']
-    joiner_loc = joiner_loc[1:-1]
+    joiner_to_location = event.joiner_to_location.strip(',')
+    joiner_loc = joiner_to_location.split(",") #['1-3', '2-3']
+    # joiner_loc = joiner_loc[1:-1]
+    
     joiner_start_end_loc = [loc.split("-") for loc in joiner_loc]  #[['1', '3'], ['2', '3']]
 
     # No need to calculate payment with only one joiner
