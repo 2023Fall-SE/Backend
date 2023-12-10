@@ -40,7 +40,8 @@ app = FastAPI()
 origins = ["http://localhost",
         "http://localhost:8080",
         "http://localhost:3000",
-        "https://carpool-service-ui-cvklf2agbq-de.a.run.app"]
+        "https://carpool-service-ui-cvklf2agbq-de.a.run.app",
+        "https://carpool-service-test-cvklf2agbq-de.a.run.app"]
 app.add_middleware(CORSMiddleware,
                     allow_origins=origins,
                     allow_credentials=True,
