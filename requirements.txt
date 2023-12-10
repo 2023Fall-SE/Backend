@@ -16,3 +16,4 @@ pusher_push_notifications
 mysqlclient
 pymysql
 cloud-sql-python-connector
+pytest
