@@ -52,9 +52,10 @@ def calculate_payable(userid: int, event: Event, joiner_list: list):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="起始地設定出錯")
         total_num_loc += (end_loc - start_loc)
     
-    user_idx_in_joiner = (''.join(joiner_list)).find(str(userid))
+    # user_idx_in_joiner = (','.join(joiner_list)).find(str(userid))
+    user_idx_in_joiner = joiner_list.index(str(userid))
     print(joiner_start_end_loc, user_idx_in_joiner, joiner_list, joiner_loc)
     amount_paid = int(joiner_start_end_loc[user_idx_in_joiner][1]) - int(joiner_start_end_loc[user_idx_in_joiner][0])
     total_paid = (amount_paid/total_num_loc) * event.accounts_payable
-
+    
     return total_paid
